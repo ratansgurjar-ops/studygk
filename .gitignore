@@ -1,0 +1,8 @@
+node_modules/
+frontend/dist/
+/Backend/.env
+*.env
+data/db.json
+data/*.log
+data/uploads/
+/.env

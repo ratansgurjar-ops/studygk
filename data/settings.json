@@ -1,0 +1,6 @@
+{
+  "heroInterval": 30,
+  "stripInterval": 30,
+  "showHero": true,
+  "showStrip": true
+}
