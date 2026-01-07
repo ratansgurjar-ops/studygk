@@ -6,3 +6,4 @@ data/db.json
 data/*.log
 data/uploads/
 /.env
+studygk_dump.sql

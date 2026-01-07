@@ -2,5 +2,12 @@
   "heroInterval": 30,
   "stripInterval": 30,
   "showHero": true,
-  "showStrip": true
+  "showStrip": true,
+  "homepage_meta_description": "Study GK Hub एक multi-category blog है जहाँ Education, GK, Current Affairs के साथ Amazon product reviews, best deals और trusted brand recommendations मिलती हैं।\n",
+  "homepage_meta_title": "Study GK Hub – Education, GK, Products Review & Deals",
+  "request_meta_title": "Contact & Request Page – Study GK Hub",
+  "request_meta_description": "Study GK Hub से content request, product suggestion या brand collaboration के लिए संपर्क करें। Education और product related queries यहाँ भेजें।\n",
+  "site_keywords": "Study GK Hub, education blog, GK blog, current affairs, competitive exams, product reviews, amazon affiliate blog, best deals, online learning, exam preparation, branded products review, Business & Marketing, Health & Fitness, Personal, Finance, Technology, Travel",
+  "amazon_affiliate_enabled": true,
+  "amazon_affiliate_disclosure": "As an Amazon Associate, Study GK Hub earns from qualifying purchases. This helps us keep providing free educational content and honest product reviews.\n"
 }
