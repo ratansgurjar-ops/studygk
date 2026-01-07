@@ -53,6 +53,10 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 
 /* Category nav */
 .cat-nav{display:flex;gap:8px;align-items:center;overflow:auto;max-width:720px;padding:4px 0}
+
+/* mobile-only category container in header-top */
+.mobile-only-cat{display:none;padding-top:8px}
+
 .cat-btn{background:transparent;border:1px solid rgba(37,99,235,0.12);padding:6px 10px;border-radius:999px;color:#073ea8;cursor:pointer;white-space:nowrap}
 .cat-btn.active{border-color:var(--accent);background:rgba(37,99,235,0.06);color:#073ea8}
 
@@ -135,6 +139,11 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 	.cat-nav{max-width:100%}
 	.post-row{flex-direction:column}
 	.post-thumb{width:100%;min-width:0;height:180px}
+}
+
+@media (max-width:600px){
+  .mobile-only-cat{display:block}
+  .mobile-only-cat .cat-nav{padding:6px 0}
 }
 
 @media (max-width:900px){

@@ -119,6 +119,25 @@ function escapeHtml(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+function buildAbsoluteUrl(req, value){
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw) || raw.startsWith('//')) return raw;
+  const protocol = req && req.protocol ? req.protocol : 'http';
+  const host = (req && typeof req.get === 'function' && req.get('host')) ? req.get('host') : '';
+  const base = host ? `${protocol}://${host}` : '';
+  const normalizedPath = raw.startsWith('/') ? raw : `/${raw.replace(/^\/+/,'')}`;
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
+function hydrateBlogRow(row, req){
+  if (!row) return row;
+  const hydrated = { ...row };
+  hydrated.featured_image = buildAbsoluteUrl(req, row.featured_image);
+  return hydrated;
+}
+
 const multer = require('multer');
 const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -147,6 +166,10 @@ function sqliteRun(sql, params = []) {
   const stmt = sqlite.prepare(sql);
   const info = stmt.run(...params);
   return info;
+}
+
+function sql(lines = []) {
+  return Array.isArray(lines) ? lines.join('\n') : String(lines || '');
 }
 
 async function dbQuery(sql, params = []) {
@@ -206,81 +229,91 @@ async function initDb() {
 
   // create tables if not exist (sqlite or mysql)
   if (useSqlite) {
-    await dbQuery(`CREATE TABLE IF NOT EXISTS admins (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE,
-      password TEXT,
-      secret_question TEXT,
-      secret_answer TEXT
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS admins (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  email TEXT UNIQUE,',
+      '  password TEXT,',
+      '  secret_question TEXT,',
+      '  secret_answer TEXT',
+      ');'
+    ]));
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS blogs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      slug TEXT UNIQUE,
-      summary TEXT,
-      content TEXT,
-      featured_image TEXT,
-      category TEXT,
-      category_id INTEGER,
-      is_hero INTEGER DEFAULT 0,
-      hero_order INTEGER DEFAULT 0,
-      meta_title TEXT,
-      meta_description TEXT,
-      keywords TEXT,
-      views INTEGER DEFAULT 0,
-      up_votes INTEGER DEFAULT 0,
-      down_votes INTEGER DEFAULT 0,
-      author TEXT,
-      published INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS blogs (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  title TEXT NOT NULL,',
+      '  slug TEXT UNIQUE,',
+      '  summary TEXT,',
+      '  content TEXT,',
+      '  featured_image TEXT,',
+      '  category TEXT,',
+      '  category_id INTEGER,',
+      '  is_hero INTEGER DEFAULT 0,',
+      '  hero_order INTEGER DEFAULT 0,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  views INTEGER DEFAULT 0,',
+      '  up_votes INTEGER DEFAULT 0,',
+      '  down_votes INTEGER DEFAULT 0,',
+      '  author TEXT,',
+      '  published INTEGER DEFAULT 0,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS brand_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      mobile TEXT,
-      title TEXT,
-      description TEXT,
-      image TEXT,
-      status TEXT DEFAULT 'open',
-      created_at TEXT DEFAULT (datetime('now')),
-      resolved_at TEXT
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS brand_requests (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  name TEXT,',
+      '  mobile TEXT,',
+      '  title TEXT,',
+      '  description TEXT,',
+      '  image TEXT,',
+      "  status TEXT DEFAULT 'open',",
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      '  resolved_at TEXT',
+      ');'
+    ]));
     try { await dbQuery('ALTER TABLE brand_requests ADD COLUMN image TEXT'); } catch(e){}
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS product_brands (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      image TEXT,
-      link TEXT,
-      description TEXT,
-      active INTEGER DEFAULT 1,
-      position INTEGER DEFAULT 0,
-      views INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS product_brands (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  title TEXT,',
+      '  image TEXT,',
+      '  link TEXT,',
+      '  description TEXT,',
+      '  active INTEGER DEFAULT 1,',
+      '  position INTEGER DEFAULT 0,',
+      '  views INTEGER DEFAULT 0,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS brand_strip (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      image TEXT,
-      link TEXT,
-      slug TEXT,
-      title TEXT,
-      price_text TEXT,
-      h1 TEXT,
-      h2 TEXT,
-      h3 TEXT,
-      meta_title TEXT,
-      meta_description TEXT,
-      keywords TEXT,
-      position INTEGER DEFAULT 0,
-      active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS brand_strip (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  image TEXT,',
+      '  link TEXT,',
+      '  slug TEXT,',
+      '  title TEXT,',
+      '  price_text TEXT,',
+      '  h1 TEXT,',
+      '  h2 TEXT,',
+      '  h3 TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  position INTEGER DEFAULT 0,',
+      '  active INTEGER DEFAULT 1,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN slug TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN title TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN price_text TEXT'); } catch(e){}
@@ -291,40 +324,46 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN meta_description TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN keywords TEXT'); } catch(e){}
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS categories (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      slug TEXT UNIQUE,
-      description TEXT,
-      position INTEGER DEFAULT 0,
-      active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS categories (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  name TEXT,',
+      '  slug TEXT UNIQUE,',
+      '  description TEXT,',
+      '  position INTEGER DEFAULT 0,',
+      '  active INTEGER DEFAULT 1,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS news (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      link TEXT,
-      position INTEGER DEFAULT 0,
-      active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS news (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  title TEXT,',
+      '  link TEXT,',
+      '  position INTEGER DEFAULT 0,',
+      '  active INTEGER DEFAULT 1,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS pages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      slug TEXT UNIQUE,
-      slug_input TEXT,
-      content TEXT,
-      meta_title TEXT,
-      meta_description TEXT,
-      keywords TEXT,
-      published INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS pages (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  title TEXT NOT NULL,',
+      '  slug TEXT UNIQUE,',
+      '  slug_input TEXT,',
+      '  content TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  published INTEGER DEFAULT 1,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
     try { await dbQuery('ALTER TABLE pages ADD COLUMN slug_input TEXT'); } catch (err) {}
     try { await dbQuery('ALTER TABLE pages ADD COLUMN meta_title TEXT'); } catch (err) {}
     try { await dbQuery('ALTER TABLE pages ADD COLUMN meta_description TEXT'); } catch (err) {}
@@ -338,22 +377,24 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE comments ADD COLUMN down_votes INTEGER DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE comments ADD COLUMN image TEXT'); } catch (err) {}
 
-    await dbQuery(`CREATE TABLE IF NOT EXISTS comments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      blog_id INTEGER NOT NULL,
-      parent_comment_id INTEGER,
-      image TEXT,
-      author_name TEXT,
-      author_email TEXT,
-      content TEXT NOT NULL,
-      status TEXT DEFAULT 'approved',
-      up_votes INTEGER DEFAULT 0,
-      down_votes INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY(blog_id) REFERENCES blogs(id) ON DELETE CASCADE,
-      FOREIGN KEY(parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
-    );`);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS comments (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  blog_id INTEGER NOT NULL,',
+      '  parent_comment_id INTEGER,',
+      '  image TEXT,',
+      '  author_name TEXT,',
+      '  author_email TEXT,',
+      '  content TEXT NOT NULL,',
+      "  status TEXT DEFAULT 'approved',",
+      '  up_votes INTEGER DEFAULT 0,',
+      '  down_votes INTEGER DEFAULT 0,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now')),",
+      '  FOREIGN KEY(blog_id) REFERENCES blogs(id) ON DELETE CASCADE,',
+      '  FOREIGN KEY(parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE',
+      ');'
+    ]));
 
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_question TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_answer TEXT'); } catch(e){}
@@ -362,61 +403,65 @@ async function initDb() {
       console.log('No admin account found. Create one using the /ratans registration UI or insert directly into the database.');
     }
   } else {
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS admins (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        email VARCHAR(255) UNIQUE,
-        password VARCHAR(255),
-        secret_question TEXT,
-        secret_answer TEXT
-      ) ENGINE=InnoDB;
-    `);
+    if (pool) {
+      console.log('MySQL detected; skipping schema initialization (assumed already applied).');
+      return;
+    }
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS admins (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  email VARCHAR(255) UNIQUE,',
+      '  password VARCHAR(255),',
+      '  secret_question TEXT,',
+      '  secret_answer TEXT',
+      ') ENGINE=InnoDB;'
+    ]));
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS comments (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        blog_id INT NOT NULL,
-        parent_comment_id INT DEFAULT NULL,
-        image TEXT,
-        author_name VARCHAR(255),
-        author_email VARCHAR(255),
-        content TEXT NOT NULL,
-        status VARCHAR(30) DEFAULT 'approved',
-        up_votes INT DEFAULT 0,
-        down_votes INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX idx_comments_blog_id (blog_id),
-        INDEX idx_comments_parent (parent_comment_id),
-        CONSTRAINT fk_comments_blog FOREIGN KEY (blog_id) REFERENCES blogs(id) ON DELETE CASCADE,
-        CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS blogs (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  title VARCHAR(255) NOT NULL,',
+      '  slug VARCHAR(255) UNIQUE,',
+      '  summary TEXT,',
+      '  content LONGTEXT,',
+      '  featured_image TEXT,',
+      '  category VARCHAR(120),',
+      '  category_id INT DEFAULT NULL,',
+      '  is_hero BOOLEAN DEFAULT FALSE,',
+      '  hero_order INT DEFAULT 0,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  views INT DEFAULT 0,',
+      '  up_votes INT DEFAULT 0,',
+      '  down_votes INT DEFAULT 0,',
+      '  author VARCHAR(255),',
+      '  published BOOLEAN DEFAULT FALSE,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS blogs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) UNIQUE,
-        summary TEXT,
-        content LONGTEXT,
-        featured_image TEXT,
-        category VARCHAR(120),
-        category_id INT DEFAULT NULL,
-        is_hero BOOLEAN DEFAULT FALSE,
-        hero_order INT DEFAULT 0,
-        meta_title TEXT,
-        meta_description TEXT,
-        keywords TEXT,
-        views INT DEFAULT 0,
-        up_votes INT DEFAULT 0,
-        down_votes INT DEFAULT 0,
-        author VARCHAR(255),
-        published BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS comments (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  blog_id INT NOT NULL,',
+      '  parent_comment_id INT DEFAULT NULL,',
+      '  image TEXT,',
+      '  author_name VARCHAR(255),',
+      '  author_email VARCHAR(255),',
+      '  content TEXT NOT NULL,',
+      "  status VARCHAR(30) DEFAULT 'approved',",
+      '  up_votes INT DEFAULT 0,',
+      '  down_votes INT DEFAULT 0,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,',
+      '  INDEX idx_comments_blog_id (blog_id),',
+      '  INDEX idx_comments_parent (parent_comment_id),',
+      '  CONSTRAINT fk_comments_blog FOREIGN KEY (blog_id) REFERENCES blogs(id) ON DELETE CASCADE,',
+      '  CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES comments(id) ON DELETE CASCADE',
+      ') ENGINE=InnoDB;'
+    ]));
 
     // Ensure large HTML (e.g., base64 images) fits in MySQL
     try {
@@ -439,19 +484,19 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE comments ADD COLUMN down_votes INT DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE comments ADD COLUMN image TEXT'); } catch (err) {}
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS brand_requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255),
-        mobile VARCHAR(100),
-        title VARCHAR(255),
-        description TEXT,
-        image TEXT,
-        status VARCHAR(30) DEFAULT 'open',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP NULL
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS brand_requests (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  name VARCHAR(255),',
+      '  mobile VARCHAR(100),',
+      '  title VARCHAR(255),',
+      '  description TEXT,',
+      '  image TEXT,',
+      "  status VARCHAR(30) DEFAULT 'open',",
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  resolved_at TIMESTAMP NULL',
+      ') ENGINE=InnoDB;'
+    ]));
     // Ensure `image` column exists in MySQL (check INFORMATION_SCHEMA then alter if missing)
     try {
       if (pool) {
@@ -495,41 +540,41 @@ async function initDb() {
       }
     } catch(e){}
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS product_brands (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255),
-        image TEXT,
-        link TEXT,
-        description TEXT,
-        active BOOLEAN DEFAULT TRUE,
-        position INT DEFAULT 0,
-        views INT DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS product_brands (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  title VARCHAR(255),',
+      '  image TEXT,',
+      '  link TEXT,',
+      '  description TEXT,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  position INT DEFAULT 0,',
+      '  views INT DEFAULT 0,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS brand_strip (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        image TEXT,
-        link TEXT,
-        slug VARCHAR(255),
-        title TEXT,
-        price_text TEXT,
-        h1 TEXT,
-        h2 TEXT,
-        h3 TEXT,
-        meta_title TEXT,
-        meta_description TEXT,
-        keywords TEXT,
-        position INT DEFAULT 0,
-        active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS brand_strip (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  image TEXT,',
+      '  link TEXT,',
+      '  slug VARCHAR(255),',
+      '  title TEXT,',
+      '  price_text TEXT,',
+      '  h1 TEXT,',
+      '  h2 TEXT,',
+      '  h3 TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  position INT DEFAULT 0,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN slug VARCHAR(255)"); } } catch(e){}
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN title TEXT"); } } catch(e){}
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN price_text TEXT"); } } catch(e){}
@@ -540,46 +585,46 @@ async function initDb() {
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN meta_description TEXT"); } } catch(e){}
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN keywords TEXT"); } } catch(e){}
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255),
-        slug VARCHAR(255) UNIQUE,
-        description TEXT,
-        position INT DEFAULT 0,
-        active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS categories (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  name VARCHAR(255),',
+      '  slug VARCHAR(255) UNIQUE,',
+      '  description TEXT,',
+      '  position INT DEFAULT 0,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS news (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255),
-        link TEXT,
-        position INT DEFAULT 0,
-        active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS news (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  title VARCHAR(255),',
+      '  link TEXT,',
+      '  position INT DEFAULT 0,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
 
-    await dbQuery(`
-      CREATE TABLE IF NOT EXISTS pages (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        slug VARCHAR(255) UNIQUE,
-        slug_input TEXT,
-        content LONGTEXT,
-        meta_title TEXT,
-        meta_description TEXT,
-        keywords TEXT,
-        published BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB;
-    `);
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS pages (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  title VARCHAR(255) NOT NULL,',
+      '  slug VARCHAR(255) UNIQUE,',
+      '  slug_input TEXT,',
+      '  content LONGTEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
+      '  published BOOLEAN DEFAULT TRUE,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
     try { await dbQuery('ALTER TABLE pages ADD COLUMN slug_input TEXT'); } catch (err) {}
     try { await dbQuery('ALTER TABLE pages MODIFY COLUMN content LONGTEXT'); } catch (err) {}
     try { await dbQuery('ALTER TABLE pages ADD COLUMN meta_title TEXT'); } catch (err) {}
@@ -811,7 +856,8 @@ app.get('/api/blogs', asyncHandler(async (req, res) => {
     FROM blogs b
     ORDER BY b.created_at DESC
   `);
-  res.json(rows);
+  const list = Array.isArray(rows) ? rows.map(row => hydrateBlogRow(row, req)) : [];
+  res.json(list);
 }));
 
 app.get('/api/blogs/:id', asyncHandler(async (req, res) => {
@@ -820,8 +866,9 @@ app.get('/api/blogs/:id', asyncHandler(async (req, res) => {
   if (!rows || rows.length === 0) return res.status(404).json({ error: 'Not found' });
   const [countRow] = await dbQuery('SELECT COUNT(*) AS c FROM comments WHERE blog_id = ? AND status = ?', [id, 'approved']);
   const base = rows[0];
+  const hydrated = hydrateBlogRow(base, req);
   const totalComments = Array.isArray(countRow) ? Number((countRow[0] && countRow[0].c) || 0) : Number((countRow && countRow.c) || 0);
-  res.json({ ...base, comments_count: totalComments });
+  res.json({ ...hydrated, comments_count: totalComments });
 }));
 
 // fetch by slug
@@ -829,7 +876,7 @@ app.get('/api/blogs/slug/:slug', asyncHandler(async (req, res) => {
   const slug = req.params.slug;
   const [rows] = await dbQuery('SELECT * FROM blogs WHERE slug = ? LIMIT 1', [slug]);
   if (!rows || rows.length === 0) return res.status(404).json({ error: 'Not found' });
-  const row = rows[0];
+  const row = hydrateBlogRow(rows[0], req);
   const blogId = row.id;
   const [countRow] = await dbQuery('SELECT COUNT(*) AS c FROM comments WHERE blog_id = ? AND status = ?', [blogId, 'approved']);
   const totalComments = Array.isArray(countRow) ? Number((countRow[0] && countRow[0].c) || 0) : Number((countRow && countRow.c) || 0);
@@ -1124,7 +1171,8 @@ app.post('/api/blogs', authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await dbQuery('SELECT * FROM blogs WHERE id = ? LIMIT 1', [newId]);
   const [countRow] = await dbQuery('SELECT COUNT(*) AS c FROM comments WHERE blog_id = ? AND status = ?', [newId, 'approved']);
   const totalComments = Array.isArray(countRow) ? Number((countRow[0] && countRow[0].c) || 0) : Number((countRow && countRow.c) || 0);
-  res.json({ ...(rows && rows[0] ? rows[0] : {}), comments_count: totalComments });
+  const row = rows && rows[0] ? hydrateBlogRow(rows[0], req) : {};
+  res.json({ ...row, comments_count: totalComments });
 }));
 
 // Public settings (used by frontend to determine intervals and visibility)
@@ -1180,7 +1228,8 @@ app.put('/api/blogs/:id', authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await dbQuery('SELECT * FROM blogs WHERE id = ? LIMIT 1', [id]);
   const [countRow] = await dbQuery('SELECT COUNT(*) AS c FROM comments WHERE blog_id = ? AND status = ?', [id, 'approved']);
   const totalComments = Array.isArray(countRow) ? Number((countRow[0] && countRow[0].c) || 0) : Number((countRow && countRow.c) || 0);
-  res.json({ ...(rows && rows[0] ? rows[0] : {}), comments_count: totalComments });
+  const row = rows && rows[0] ? hydrateBlogRow(rows[0], req) : {};
+  res.json({ ...row, comments_count: totalComments });
 }));
 
 app.delete('/api/blogs/:id', authMiddleware, asyncHandler(async (req, res) => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { displayAuthor } from '../utils'
 import { Helmet } from 'react-helmet-async'
 import EngagementControls from '../components/EngagementControls'
 
@@ -264,7 +265,7 @@ export default function Home({ search, setSearch }){
                     <div className="hero-card-body">
                         <div className="hero-kicker">Featured</div>
                         <h2 className="hero-title">{currentHero.title}</h2>
-                      <div className="hero-meta muted" style={{marginBottom:8}}>{new Date(currentHero.created_at).toLocaleDateString()} · {currentHero.author || currentHero.author === '' ? (currentHero.author || 'Admin') : 'Admin'}</div>
+                      <div className="hero-meta muted" style={{marginBottom:8}}>{new Date(currentHero.created_at).toLocaleDateString()} · {displayAuthor(currentHero.author)}</div>
                       <p className="hero-sub">{stripHtml(currentHero.summary || currentHero.content || '').slice(0,160)}{stripHtml(currentHero.summary || currentHero.content || '').length>160?'…':''}</p>
                       <div style={{display:'flex',gap:8,alignItems:'center',marginTop:10}}>
                         <button onClick={()=>{ const p = '/posts/'+(currentHero.slug || currentHero.id); try{ window.history.pushState({},'', p); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = p } }}>Read</button>
@@ -279,7 +280,7 @@ export default function Home({ search, setSearch }){
                         {b.featured_image ? <img src={b.featured_image} alt={b.title||'Post image'} className="th-img" loading="lazy" decoding="async"/> : <div className="th-img th-img--placeholder"/>}
                         <div style={{flex:1,textAlign:'left'}}>
                           <div className="th-title">{b.title}</div>
-                          <div className="th-meta">{new Date(b.created_at).toLocaleDateString()} · {b.author || 'Unknown'}</div>
+                          <div className="th-meta">{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}</div>
                           <div className="th-desc">{excerptFromPost(b, 84)}</div>
                         </div>
                       </button>
@@ -346,7 +347,7 @@ export default function Home({ search, setSearch }){
               <article key={b.id} className="recent-card">
                 {b.featured_image ? <img src={b.featured_image} alt={b.title} className="recent-card-img" loading="lazy" decoding="async" /> : <div className="recent-card-img recent-card-img--placeholder" />}
                 <div className="recent-card-body">
-                  <div className="muted" style={{fontSize:12}}>{new Date(b.created_at).toLocaleDateString()} · {b.author || 'Unknown'}</div>
+                  <div className="muted" style={{fontSize:12}}>{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}</div>
                   <h4 style={{margin:'6px 0'}} className="recent-card-title"><a href={'/posts/'+(b.slug || b.id)} onClick={(e)=>{ e.preventDefault(); try{ window.history.pushState({},'', '/posts/'+(b.slug || b.id)); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/posts/'+(b.slug || b.id) } }}>{b.title}</a></h4>
                   <p className="muted" style={{fontSize:13}}>{stripHtml(b.summary || b.content || '').slice(0,120)}{stripHtml(b.summary || b.content || '').length>120?'…':''}</p>
                 </div>
@@ -405,7 +406,7 @@ export default function Home({ search, setSearch }){
                     )}
                     <div className="post-main">
                       <h3 className="post-title"><a href={'/posts/'+(b.slug || b.id)} onClick={(e)=>{ e.preventDefault(); try{ window.history.pushState({},'', '/posts/'+(b.slug || b.id)); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/posts/'+(b.slug || b.id) } }}>{b.title}</a></h3>
-                      <div className="muted" style={{fontSize:13,marginTop:6,marginBottom:8}}>{new Date(b.created_at).toLocaleDateString()} · by {b.author || 'Unknown'}{b.category ? ' · ' + b.category : ''}</div>
+                      <div className="muted" style={{fontSize:13,marginTop:6,marginBottom:8}}>{new Date(b.created_at).toLocaleDateString()} · by {displayAuthor(b.author) || 'Unknown'}{b.category ? ' · ' + b.category : ''}</div>
                             <div className="post-preview">
                               {(function(){
                                 const txt = stripHtml(b.content || b.summary || '')

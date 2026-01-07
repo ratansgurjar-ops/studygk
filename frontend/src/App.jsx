@@ -98,11 +98,6 @@ export default function App(){
   const rawDynamicSlug = !isAdmin && !staticPaths.has(pathOnly) && !isPostRoute && pathOnly !== '/' ? safeDecode(pathOnly.slice(1)) : ''
   const dynamicSlug = normalizeDynamicSlug(rawDynamicSlug) || rawDynamicSlug
 
-  // Debug logs to help diagnose when dynamicSlug is missing
-  try {
-    // eslint-disable-next-line no-console
-    console.log('[App] pathOnly=', pathOnly, 'rawDynamicSlug=', rawDynamicSlug, 'dynamicSlug=', dynamicSlug, 'isPostRoute=', isPostRoute)
-  } catch (e) {}
   if (dynamicSlug) {
     return (
       <HelmetProvider>
@@ -132,6 +127,14 @@ export default function App(){
               <div className="header-actions">
                 <input aria-label="Search posts" className="search-input header-search" placeholder="Search posts" value={search} onChange={e=>setSearch(e.target.value)} />
                 <button className="nav-btn header-request" onClick={()=>nav('/request')}>Request Free Feature</button>
+              </div>
+              {/* Mobile categories quick access (visible on small screens) */}
+              <div className="mobile-only-cat">
+                <div className="cat-nav">
+                  {categories.map(c => (
+                    <button key={c} className={`cat-btn ${getSelectedCategory()===c ? 'active' : ''}`} onClick={()=>nav('/?category='+encodeURIComponent(c))}>{c}</button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

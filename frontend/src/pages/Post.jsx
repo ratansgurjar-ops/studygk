@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { displayAuthor } from '../utils'
 import { Helmet } from 'react-helmet-async'
 import EngagementControls from '../components/EngagementControls'
 import CommentEngagementControls from '../components/CommentEngagementControls'
@@ -704,7 +705,7 @@ export default function Post({ slug }){
 		"@type": "Article",
 		"headline": post.title,
 		"description": desc,
-		"author": { "@type": "Person", "name": post.author || 'StudyGK' },
+		"author": { "@type": "Person", "name": displayAuthor(post && post.author) || 'StudyGK' },
 		"datePublished": post.created_at,
 		"dateModified": post.updated_at || post.created_at,
 		"mainEntityOfPage": { "@type": "WebPage", "@id": url },
@@ -751,7 +752,7 @@ export default function Post({ slug }){
 					/>
 				)}
 				<h1 style={{marginTop:0}}>{post.title}</h1>
-				<div style={{color:'#666',marginBottom:12}}>{post.author || 'Admin'} — {new Date(post.created_at).toLocaleDateString()}</div>
+				<div style={{color:'#666',marginBottom:12}}>{displayAuthor(post && post.author) || 'Admin'} — {new Date(post.created_at).toLocaleDateString()}</div>
 				<div dangerouslySetInnerHTML={{__html: decorateLinksLocal(post.content || '')}} />
 				<div style={{marginTop:20,paddingTop:16,borderTop:'1px solid #e5e7eb'}}>
 					<EngagementControls
