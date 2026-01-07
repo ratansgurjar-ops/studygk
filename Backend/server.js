@@ -153,6 +153,58 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } });
 
+// Save a base64 data URL or remote image URL into the uploads folder and
+// return a server-relative path (served under /uploads).
+async function saveImageFromString(imageString) {
+  try {
+    if (!imageString || typeof imageString !== 'string') return null;
+
+    // Data URL (base64)
+    const dataMatch = imageString.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+    if (dataMatch) {
+      const mime = dataMatch[1];
+      const base64Data = dataMatch[2];
+      const ext = (mime.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '');
+      const filename = `upload-${Date.now()}-${Math.round(Math.random()*1e6)}.${ext}`;
+      const filepath = path.join(uploadDir, filename);
+      await fs.promises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
+      return `/uploads/${filename}`;
+    }
+
+    // Remote URL (http/https or protocol-relative)
+    let urlStr = imageString;
+    if (urlStr.startsWith('//')) urlStr = 'http:' + urlStr;
+    if (/^https?:\/\//i.test(urlStr)) {
+      const httpLib = urlStr.startsWith('https') ? require('https') : require('http');
+      try {
+        const parsed = new URL(urlStr);
+        const extFromPath = (path.extname(parsed.pathname) || '').split('.').pop();
+        const ext = extFromPath || 'png';
+        const filename = `upload-${Date.now()}-${Math.round(Math.random()*1e6)}.${ext}`;
+        const filepath = path.join(uploadDir, filename);
+        await new Promise((resolve, reject) => {
+          const req = httpLib.get(urlStr, (resp) => {
+            if (resp.statusCode >= 400) return reject(new Error('Failed to download image: ' + resp.statusCode));
+            const ws = fs.createWriteStream(filepath);
+            resp.pipe(ws);
+            ws.on('finish', () => ws.close(resolve));
+            ws.on('error', reject);
+          });
+          req.on('error', reject);
+        });
+        return `/uploads/${filename}`;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    // Otherwise assume it's already a server path or filename
+    return imageString;
+  } catch (err) {
+    return null;
+  }
+}
+
 let pool = null;
 let sqlite = null;
 let useSqlite = false;
