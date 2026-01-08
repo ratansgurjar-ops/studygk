@@ -33,6 +33,11 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 const uploadsStaticDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsStaticDir)) fs.mkdirSync(uploadsStaticDir, { recursive: true });
 app.use('/uploads', express.static(uploadsStaticDir));
+// also serve legacy data/uploads as a fallback so previously-uploaded images remain available
+const legacyUploads = path.join(__dirname, '..', 'data', 'uploads');
+if (fs.existsSync(legacyUploads)) {
+  app.use('/uploads', express.static(legacyUploads));
+}
 
 // simple settings stored in data/settings.json (admin editable)
 const settingsFile = path.join(__dirname, '..', 'data', 'settings.json');
