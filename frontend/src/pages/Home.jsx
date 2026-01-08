@@ -108,6 +108,16 @@ export default function Home({ search, setSearch }){
     } catch(e) {}
   }
 
+  const hitStrip = async (id) => {
+    try {
+      const url = '/api/hit/brand-strip/' + encodeURIComponent(id)
+      if (navigator && navigator.sendBeacon) {
+        try { navigator.sendBeacon(url); return } catch(e) {}
+      }
+      fetch(url, { method: 'POST', keepalive: true }).catch(()=>{})
+    } catch(e) {}
+  }
+
   useEffect(()=>{
     fetchNews()
     const poll = setInterval(fetchNews, 10 * 1000)
@@ -313,13 +323,13 @@ export default function Home({ search, setSearch }){
                     <div key={it.id} className="hero-strip-item">
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
                         {it.image ? (
-                          <a href={href} target="_blank" rel="nofollow noopener noreferrer" onClick={(e)=>{ if (!it.link) { e.preventDefault(); return } try{ hitBrand(it.id) }catch(e){} }}>
+                          <a href={href} target="_blank" rel="nofollow noopener noreferrer" onClick={(e)=>{ if (!it.link) { e.preventDefault(); return } try{ hitStrip(it.id) }catch(e){} }}>
                             <img src={it.image} alt={it.title||'brand'} loading="lazy" decoding="async"/>
                           </a>
                         ) : <div className="hero-strip-placeholder"/>}
                         <div className="hero-strip-caption" style={{padding:0,textAlign:'center'}}>
-                          {it.title && <div className="hero-strip-title" style={{fontSize:13,fontWeight:700,marginBottom:6}}><a href={targetPath} onClick={(e)=>{ e.preventDefault(); try{ if (!it.link) { /* still record click for brand */ } try{ hitBrand(it.id) }catch(e){} window.history.pushState({},'', targetPath); window.dispatchEvent(new PopStateEvent('popstate')) }catch(err){ window.location.href = targetPath } }}>{displayTitle}</a></div>}
-                          {it.link && <div className="hero-strip-price" style={{marginTop:6}}><a className="hero-strip-cta" href={href} target="_blank" rel="nofollow noopener noreferrer" onClick={(e)=>{ if (!it.link) { e.preventDefault(); return } try{ hitBrand(it.id) }catch(e){} }}>Check price on Amazon</a></div>}
+                          {it.title && <div className="hero-strip-title" style={{fontSize:13,fontWeight:700,marginBottom:6}}><a href={targetPath} onClick={(e)=>{ e.preventDefault(); try{ if (!it.link) { /* still record click for brand */ } try{ hitStrip(it.id) }catch(e){} window.history.pushState({},'', targetPath); window.dispatchEvent(new PopStateEvent('popstate')) }catch(err){ window.location.href = targetPath } }}>{displayTitle}</a></div>}
+                          {it.link && <div className="hero-strip-price" style={{marginTop:6}}><a className="hero-strip-cta" href={href} target="_blank" rel="nofollow noopener noreferrer" onClick={(e)=>{ if (!it.link) { e.preventDefault(); return } try{ hitStrip(it.id) }catch(e){} }}>Check price on Amazon</a></div>}
                         </div>
                       </div>
                     </div>
