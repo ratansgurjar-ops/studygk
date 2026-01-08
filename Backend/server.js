@@ -6,6 +6,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 4000;
@@ -144,21 +145,29 @@ function hydrateBlogRow(row, req){
   hydrated.featured_image = buildAbsoluteUrl(req, row.featured_image);
   return hydrated;
 }
+// ===== UPLOADS CONFIG (FINAL & CORRECT) =====
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-const multer = require('multer');
-const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
+  destination: (_req, _file, cb) => cb(null, uploadDir), // ✅ Backend/uploads
   filename: (_req, file, cb) => {
     const original = (file && file.originalname) ? String(file.originalname) : 'upload';
     const ext = path.extname(original);
-    const base = path.basename(original, ext).replace(/[^a-z0-9_-]+/gi, '').slice(0, 40) || 'file';
+    const base = path.basename(original, ext)
+        .replace(/[^a-z0-9_-]+/gi, '') || 'file';
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e6);
     cb(null, `${base}-${unique}${ext}`);
   }
 });
-const upload = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } });
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024 }
+});
 
 // Save a base64 data URL or remote image URL into the uploads folder and
 // return a server-relative path (served under /uploads).
