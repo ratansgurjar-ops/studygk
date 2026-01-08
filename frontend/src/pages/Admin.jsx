@@ -506,6 +506,8 @@ export default function Admin(){
   useEffect(()=>{ if (token) { fetchStripList() } }, [token])
   useEffect(()=>{ try{ console.log('Admin activePanel ->', activePanel) }catch(e){} }, [activePanel])
   useEffect(()=>{ if (activePanel === 'requests') { fetchRequests() } }, [activePanel])
+  // ensure strip list is fetched when Hero Strip panel becomes active
+  useEffect(()=>{ if (token && activePanel === 'hero-strip') { fetchStripList() } }, [token, activePanel])
   useEffect(()=>{ if (token) { fetchAdminCategories() } }, [token])
   useEffect(()=>{ if (token && activePanel === 'pages') { fetchDynamicPages() } }, [token, activePanel])
   useEffect(()=>{ if (token && activePanel === 'comments') { fetchAdminComments({ status: commentStatusFilter, blog_id: commentBlogFilter }) } }, [token, activePanel, commentStatusFilter, commentBlogFilter])
@@ -1735,6 +1737,7 @@ function BrandingStripManager({ token }){
   const [stripDateFromLocal, setStripDateFromLocal] = useState('')
   const [stripDateToLocal, setStripDateToLocal] = useState('')
   const [form, setForm] = useState({ image:'', link:'', position:0, active:true })
+  const fileInputRef = useRef(null)
   // include title, price_text and SEO fields for strip items
   const [formExt, setFormExt] = useState({ title: '', price_text: '', slug: '', h1: '', h2: '', h3: '', meta_description: '', keywords: '' })
   const [slugEditedStrip, setSlugEditedStrip] = useState(false)
