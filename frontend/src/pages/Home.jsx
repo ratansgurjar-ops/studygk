@@ -5,10 +5,7 @@ import EngagementControls from '../components/EngagementControls'
 
 function stripHtml(html){
   if (!html) return ''
-  const d = typeof document !== 'undefined' ? document.createElement('div') : null
-  if (d) { d.innerHTML = html; return d.textContent || d.innerText || '' }
-  // fallback: remove tags naively
-  return html.replace(/<[^>]*>/g, '')
+  return String(html).replace(/<[^>]*>/g, ' ')
 }
 
 function escapeHtml(unsafe) {
@@ -37,7 +34,7 @@ function normalizeUrl(u){
 
 
 function excerptFromPost(post, maxLen){
-  const txt = stripHtml(post?.summary || post?.content || '')
+  const txt = stripHtml(post?.summary || post?.content_preview || post?.content || '')
   const s = txt.replace(/\s+/g,' ').trim()
   if (!s) return ''
   if (s.length <= maxLen) return s
@@ -60,7 +57,7 @@ export default function Home({ search, setSearch }){
   const [amazonEnabled, setAmazonEnabled] = useState(false)
   const [amazonDisclosure, setAmazonDisclosure] = useState('')
   useEffect(()=>{
-    fetch('/api/blogs')
+    fetch('/api/blogs-lite')
       .then(r=>r.json())
       .then(data => setBlogs(Array.isArray(data) ? data : []))
       .catch(console.error)
@@ -266,7 +263,7 @@ export default function Home({ search, setSearch }){
                         <div className="hero-kicker">Featured</div>
                         <h2 className="hero-title">{currentHero.title}</h2>
                       <div className="hero-meta muted" style={{marginBottom:8}}>{new Date(currentHero.created_at).toLocaleDateString()} · {displayAuthor(currentHero.author)}</div>
-                      <p className="hero-sub">{stripHtml(currentHero.summary || currentHero.content || '').slice(0,160)}{stripHtml(currentHero.summary || currentHero.content || '').length>160?'…':''}</p>
+                      <p className="hero-sub">{stripHtml(currentHero.summary || currentHero.content_preview || currentHero.content || '').slice(0,160)}{stripHtml(currentHero.summary || currentHero.content_preview || currentHero.content || '').length>160?'…':''}</p>
                       <div style={{display:'flex',gap:8,alignItems:'center',marginTop:10}}>
                         <button onClick={()=>{ const p = '/posts/'+(currentHero.slug || currentHero.id); try{ window.history.pushState({},'', p); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = p } }}>Read</button>
                       </div>
@@ -349,7 +346,7 @@ export default function Home({ search, setSearch }){
                 <div className="recent-card-body">
                   <div className="muted" style={{fontSize:12}}>{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}</div>
                   <h4 style={{margin:'6px 0'}} className="recent-card-title"><a href={'/posts/'+(b.slug || b.id)} onClick={(e)=>{ e.preventDefault(); try{ window.history.pushState({},'', '/posts/'+(b.slug || b.id)); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/posts/'+(b.slug || b.id) } }}>{b.title}</a></h4>
-                  <p className="muted" style={{fontSize:13}}>{stripHtml(b.summary || b.content || '').slice(0,120)}{stripHtml(b.summary || b.content || '').length>120?'…':''}</p>
+                  <p className="muted" style={{fontSize:13}}>{stripHtml(b.summary || b.content_preview || b.content || '').slice(0,120)}{stripHtml(b.summary || b.content_preview || b.content || '').length>120?'…':''}</p>
                 </div>
               </article>
             ))}
@@ -409,7 +406,7 @@ export default function Home({ search, setSearch }){
                       <div className="muted" style={{fontSize:13,marginTop:6,marginBottom:8}}>{new Date(b.created_at).toLocaleDateString()} · by {displayAuthor(b.author) || 'Unknown'}{b.category ? ' · ' + b.category : ''}</div>
                             <div className="post-preview">
                               {(function(){
-                                const txt = stripHtml(b.content || b.summary || '')
+                                const txt = stripHtml(b.summary || b.content_preview || b.content || '')
                                 const isExpanded = expandedPosts.has(b.id)
                                 const shown = txt
                                 return (

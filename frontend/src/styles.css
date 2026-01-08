@@ -163,7 +163,7 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 .posts-layout{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
 .posts-list{display:flex;flex-direction:column;gap:12px}
 .branding-sidebar{position:relative}
-.branding-item .branding-img{width:100%;height:320px;object-fit:cover;border-radius:8px}
+.branding-item .branding-img{width:100%;max-height:320px;height:auto;object-fit:contain;object-position:center center;border-radius:8px;background:#f7f9fc;display:block}
 .branding-item .branding-desc{max-height:84px;overflow:hidden}
 
 .branding-primary .branding-img{height:420px}
@@ -292,14 +292,21 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 .modal-card{position:relative}
 
 /* Product branding block (fixed on right side) */
-.branding-block{position:fixed;right:18px;top:52%;transform:translateY(-20%);width:260px;background:var(--card);border:1px solid rgba(2,6,23,0.04);border-radius:10px;padding:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);z-index:40}
-.branding-block .branding-img{width:100%;height:160px;object-fit:cover;border-radius:8px;margin-bottom:8px}
+.branding-block{position:fixed;right:18px;top:52%;transform:translateY(-20%);width:220px;background:var(--card);border:1px solid rgba(2,6,23,0.04);border-radius:10px;padding:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);z-index:40}
+.branding-block .branding-img{width:100%;max-height:160px;height:auto;object-fit:contain;object-position:center center;border-radius:8px;margin-bottom:8px;background:#f7f9fc;display:block}
 .branding-block .branding-body{padding:6px}
 .branding-block .branding-title{font-weight:700}
 .branding-block .branding-desc{color:var(--muted);font-size:13px;margin-top:6px}
 
 @media (max-width:900px){
 	.branding-block{position:static;transform:none;width:100%;margin:12px 0}
+
+	/* Improve header layout on narrower screens: stack header inner and hide long tagline */
+	.header-top .header-inner{flex-direction:column;align-items:stretch}
+	.logo-wrap{flex-direction:row;align-items:center;gap:10px}
+	.logo-sub, .logo-tagline{display:none}
+	.logo{font-size:18px}
+	.header-actions{width:100%;margin-top:8px}
 }
 
 /* Hero overlay arrows and pause */

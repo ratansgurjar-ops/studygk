@@ -39,6 +39,71 @@ function normalizePageSlugInput(value) {
   return slug
 }
 
+function Overview({ token }){
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  useEffect(()=>{ fetchOverview() }, [])
+  async function fetchOverview(){
+    setLoading(true)
+    try{
+      const res = await fetch('/api/admin/overview', { headers: { 'Authorization': 'Bearer ' + (token||'') } })
+      if (!res.ok) { setData(null); setLoading(false); return }
+      const d = await res.json(); setData(d)
+    }catch(e){ console.error(e); setData(null) }
+    setLoading(false)
+  }
+  if (loading) return <div style={{padding:12}}>Loading overview…</div>
+  if (!data) return <div style={{padding:12,color:'#666'}}>No overview data available.</div>
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Blogs</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.blogs_count}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Total Blog Views</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.total_blog_views}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Comments</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.comments_count}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Brand Strips</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.strips_count}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Product Brands</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.brands_count}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Pending Brand Requests</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.brand_requests_pending}</div>
+      </div>
+
+      <div style={{gridColumn:'1/-1',padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Top Trending Blogs</div>
+        {Array.isArray(data.trending_blogs) && data.trending_blogs.length ? (
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr><th style={{textAlign:'left',padding:8}}>Title</th><th style={{padding:8}}>Views</th><th style={{padding:8}}>Comments</th></tr>
+            </thead>
+            <tbody>
+              {data.trending_blogs.map(b=> (
+                <tr key={b.id} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
+                  <td style={{padding:8}}>{b.title}</td>
+                  <td style={{padding:8,textAlign:'center'}}>{b.views || 0}</td>
+                  <td style={{padding:8,textAlign:'center'}}>{b.comments_count || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div style={{color:'#666'}}>No trending blogs yet.</div>}
+      </div>
+    </div>
+  )
+}
+
 function getPagePathFromInput(value) {
   const slug = normalizePageSlugInput(value)
   return slug ? '/' + slug : ''
@@ -592,43 +657,7 @@ export default function Admin(){
             {activePanel === 'settings' && (
               <SettingsPanel token={token} />
             )}
-            {activePanel === 'overview' && (
-              <div>
-                <h2>Overview</h2>
-                <div style={{marginTop:8,overflowX:'auto'}}>
-                  <table className="admin-requests-table admin-table" style={{width:'100%',borderCollapse:'collapse'}}>
-                    <thead>
-                      <tr>
-                        <th style={{padding:8}}>Image</th>
-                        <th style={{padding:8}}>Name</th>
-                        <th style={{padding:8}}>Link</th>
-                        <th style={{padding:8}}>Position</th>
-                        <th style={{padding:8}}>Active</th>
-                        <th style={{padding:8}}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(stripList||[]).map(s=> (
-                        <tr key={s.id}>
-                          <td style={{padding:8,verticalAlign:'top'}}>{s.image ? <img src={s.image} alt={s.name} style={{width:84,height:56,objectFit:'cover',borderRadius:6}} /> : <div style={{width:84,height:56,background:'#f3f4f6',borderRadius:6}}/>}</td>
-                          <td style={{padding:8,verticalAlign:'top'}}>{s.name}</td>
-                          <td style={{padding:8,verticalAlign:'top'}}>{s.link}</td>
-                          <td style={{padding:8,verticalAlign:'top'}}>{s.position}</td>
-                          <td style={{padding:8,verticalAlign:'top'}}>{s.active ? 'Yes' : 'No'}</td>
-                          <td style={{padding:8,verticalAlign:'top',display:'flex',gap:8}}>
-                            <button onClick={()=>editStrip(s)}>Edit</button>
-                            <button onClick={()=>removeStrip(s.id)}>Delete</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {(stripList||[]).length === 0 && (
-                  <div style={{padding:12,color:'#666'}}>No overview items to display.</div>
-                )}
-              </div>
-            )}
+            
 
             {activePanel === 'blogs' && (
               <div>
@@ -1013,6 +1042,13 @@ export default function Admin(){
               </div>
             )}
 
+            {activePanel === 'overview' && (
+              <div>
+                <h2>Overview</h2>
+                <Overview token={token} />
+              </div>
+            )}
+
             {activePanel === 'categories' && (
               <div>
                 <CategoriesManager token={token} onChange={fetchAdminCategories} />
@@ -1354,7 +1390,7 @@ function CategoriesManager({ token, onChange }){
   const [catSearch, setCatSearch] = React.useState('')
   const [catDateFrom, setCatDateFrom] = React.useState('')
   const [catDateTo, setCatDateTo] = React.useState('')
-  const [form, setForm] = React.useState({ name:'', slug:'', description:'', position:0, active:true })
+  const [form, setForm] = React.useState({ name:'', slug:'', description:'', meta_title:'', meta_description:'', keywords:'', position:0, active:true })
   const [editingId, setEditingId] = React.useState(null)
 
   useEffect(()=>{ fetchList() }, [])
@@ -1371,7 +1407,7 @@ function CategoriesManager({ token, onChange }){
     else { const txt = await res.text(); try{ const d = txt?JSON.parse(txt):null; alert(d?.error||('Error: '+res.status)) }catch{ alert('Error: '+res.status+' '+ (txt||res.statusText)) } }
   }catch(err){ console.error(err); alert('Save failed') } }
 
-  async function editIt(c){ setForm({ name:c.name||'', slug:c.slug||'', description:c.description||'', position:Number(c.position||0), active: c.active===1||c.active===true }); setEditingId(c.id); window.scrollTo({top:0,behavior:'smooth'}) }
+  async function editIt(c){ setForm({ name:c.name||'', slug:c.slug||'', description:c.description||'', meta_title: c.meta_title||'', meta_description: c.meta_description||'', keywords: c.keywords||'', position:Number(c.position||0), active: c.active===1||c.active===true }); setEditingId(c.id); window.scrollTo({top:0,behavior:'smooth'}) }
   async function remove(id){ if (!confirm('Delete category?')) return; const t = localStorage.getItem('token') || token || ''; const res = await fetch('/api/categories/'+id, { method:'DELETE', headers: { 'Authorization': 'Bearer '+t } }); if (res.ok) { fetchList(); if (onChange) onChange(); } else alert('Delete failed') }
 
   return (
@@ -1385,12 +1421,17 @@ function CategoriesManager({ token, onChange }){
         <div style={{marginTop:8}}>
           <textarea placeholder="Description (optional)" rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
         </div>
+        <div style={{marginTop:8,display:'grid',gap:8}}>
+          <input placeholder="Meta title (SEO)" value={form.meta_title} onChange={e=>setForm({...form,meta_title:e.target.value})} />
+          <textarea placeholder="Meta description (SEO)" rows={2} value={form.meta_description} onChange={e=>setForm({...form,meta_description:e.target.value})} />
+          <input placeholder="Keywords (comma separated)" value={form.keywords} onChange={e=>setForm({...form,keywords:e.target.value})} />
+        </div>
         <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8}}>
           <label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={Boolean(form.active)} onChange={e=>setForm({...form,active:e.target.checked})}/> Active</label>
           <input type="number" value={Number(form.position||0)} onChange={e=>setForm({...form,position:Number(e.target.value||0)})} style={{width:120}} />
           <div style={{marginLeft:'auto'}}>
             <button type="submit">{editingId ? 'Update' : 'Create'}</button>
-            {editingId && <button type="button" onClick={()=>{ setEditingId(null); setForm({ name:'', slug:'', description:'', position:0, active:true }) }} style={{marginLeft:8}}>Cancel</button>}
+            {editingId && <button type="button" onClick={()=>{ setEditingId(null); setForm({ name:'', slug:'', description:'', meta_title:'', meta_description:'', keywords:'', position:0, active:true }) }} style={{marginLeft:8}}>Cancel</button>}
           </div>
         </div>
       </form>
@@ -1491,7 +1532,7 @@ function BrandingManager({ token }){
   const [brandSearch, setBrandSearch] = useState('')
   const [brandDateFrom, setBrandDateFrom] = useState('')
   const [brandDateTo, setBrandDateTo] = useState('')
-  const [form, setForm] = useState({ title:'', slug:'', image:'', link:'', description:'', active:true, position:0 })
+  const [form, setForm] = useState({ title:'', slug:'', image:'', link:'', description:'', meta_title:'', meta_description:'', keywords:'', active:true, position:0 })
   const [slugEdited, setSlugEdited] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -1526,13 +1567,13 @@ function BrandingManager({ token }){
       // ensure slug sanitized before sending
       const payload = { ...form, slug: (form.slug || '').toString().trim().toLowerCase().replace(/[^a-z0-9\-_/]+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'') }
       const res = await fetch(url, { method, headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer ' + (token||'') }, body: JSON.stringify(payload) })
-      if (res.ok) { setForm({ title:'', slug:'', image:'', link:'', description:'', active:true, position:0 }); setSlugEdited(false); setEditingId(null); fetchList(); }
+      if (res.ok) { setForm({ title:'', slug:'', image:'', link:'', description:'', meta_title:'', meta_description:'', keywords:'', active:true, position:0 }); setSlugEdited(false); setEditingId(null); fetchList(); }
       else { const txt = await res.text(); try{ const d = txt?JSON.parse(txt):null; alert(d?.error||('Error: '+res.status)) }catch{ alert('Error: '+res.status+' '+ (txt||res.statusText)) } }
     }catch(err){ console.error(err); alert('Save failed') }
   }
 
   async function edit(b){
-    setForm({ title:b.title||'', slug:b.slug||'', image:b.image||'', link:b.link||'', description:b.description||'', active: b.active===1||b.active===true, position: Number(b.position||0) })
+    setForm({ title:b.title||'', slug:b.slug||'', image:b.image||'', link:b.link||'', description:b.description||'', meta_title: b.meta_title||'', meta_description: b.meta_description||'', keywords: b.keywords||'', active: b.active===1||b.active===true, position: Number(b.position||0) })
     setSlugEdited(Boolean(b.slug))
     setEditingId(b.id)
     window.scrollTo({top:0,behavior:'smooth'})
@@ -1565,12 +1606,20 @@ function BrandingManager({ token }){
         <div style={{marginTop:8}}>
           <textarea placeholder="Short description" rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} />
         </div>
+        <div style={{marginTop:8}}>
+          <input placeholder="Link (https://...)" value={form.link} onChange={e=>setForm({...form,link:e.target.value})} />
+        </div>
+        <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr',gap:8}}>
+          <input placeholder="Meta title (SEO)" value={form.meta_title} onChange={e=>setForm({...form,meta_title:e.target.value})} />
+          <textarea placeholder="Meta description (SEO)" rows={2} value={form.meta_description} onChange={e=>setForm({...form,meta_description:e.target.value})} />
+          <input placeholder="Keywords (comma separated)" value={form.keywords} onChange={e=>setForm({...form,keywords:e.target.value})} />
+        </div>
         <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8}}>
           <label style={{display:'flex',gap:8,alignItems:'center'}}><input type="checkbox" checked={Boolean(form.active)} onChange={e=>setForm({...form,active:e.target.checked})}/> Active</label>
           <input type="number" value={Number(form.position||0)} onChange={e=>setForm({...form,position:Number(e.target.value||0)})} style={{width:120}} />
           <div style={{marginLeft:'auto'}}>
             <button type="submit">{editingId ? 'Update' : 'Create'}</button>
-            {editingId && <button type="button" onClick={()=>{ setEditingId(null); setForm({ title:'', slug:'', image:'', link:'', description:'', active:true, position:0 }); setSlugEdited(false) }} style={{marginLeft:8}}>Cancel</button>}
+            {editingId && <button type="button" onClick={()=>{ setEditingId(null); setForm({ title:'', slug:'', image:'', link:'', description:'', meta_title:'', meta_description:'', keywords:'', active:true, position:0 }); setSlugEdited(false) }} style={{marginLeft:8}}>Cancel</button>}
           </div>
         </div>
       </form>

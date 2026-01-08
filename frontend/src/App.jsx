@@ -6,6 +6,7 @@ const Post = lazy(() => import('./pages/Post'))
 const RequestPage = lazy(() => import('./pages/Request'))
 const TermsPage = lazy(() => import('./pages/Terms'))
 const PolicyPage = lazy(() => import('./pages/PromotionPolicy'))
+const ContactPage = lazy(() => import('./pages/Contact'))
 const AboutPage = lazy(() => import('./pages/About'))
 const DynamicPage = lazy(() => import('./pages/DynamicPage'))
 import { HelmetProvider } from 'react-helmet-async'
@@ -89,6 +90,8 @@ export default function App(){
     if (!target.startsWith('/')) target = '/' + target
     window.history.pushState({}, '', target)
     setRoute(normalizeRoutePath(window.location.pathname))
+    // notify listeners (components reading query params) about navigation
+    try { window.dispatchEvent(new PopStateEvent('popstate')) } catch (e) {}
   }
 
   const pathOnly = route || '/'
@@ -160,6 +163,7 @@ export default function App(){
             : pathOnly === '/request' ? <RequestPage />
             : pathOnly === '/terms' ? <TermsPage />
             : pathOnly === '/policy' ? <PolicyPage />
+            : pathOnly === '/contact' ? <ContactPage />
             : pathOnly === '/about' ? <AboutPage />
             : pathOnly === '/ratans' ? <AdminRegister />
             : isPostRoute ? <Post slug={safeDecode(pathOnly.replace('/posts/',''))} />
@@ -181,11 +185,11 @@ export default function App(){
             </div>
           </div>
 
-          <div style={{textAlign:'center', padding:12, fontSize:15}}>
+            <div style={{textAlign:'center', padding:12, fontSize:15}}>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/about')}>About!</span>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/terms')}>Terms!</span>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/policy')}>Promotion!</span>
-            <span style={{marginLeft:12, fontWeight:600}}>contact me 8118802078</span>
+            <span style={{cursor:'pointer', marginLeft:12, fontWeight:600}} onClick={()=>nav('/contact')}>Contact</span>
           </div>
 
           <div style={{textAlign:'center', padding:'6px 12px', fontSize:13, marginTop:6}}>

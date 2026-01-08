@@ -235,7 +235,47 @@ async function dbQuery(sql, params = []) {
     return [info, undefined];
   }
   if (!pool) throw new Error('Database pool not initialised');
-  return pool.execute(sql, params);
+  try {
+    return await pool.execute(sql, params);
+  } catch (err) {
+    // If a MySQL 'unknown column' error occurs, attempt to add the missing columns
+    // for common INSERT INTO / UPDATE statements and retry once.
+    try {
+      if (err && err.code === 'ER_BAD_FIELD_ERROR' && typeof sql === 'string') {
+        const s = sql;
+        let table = null;
+        let cols = [];
+        const insertMatch = s.match(/INSERT\s+INTO\s+([`\w]+)\s*\(([^)]+)\)/i);
+        const updateMatch = s.match(/UPDATE\s+([`\w]+)\s+SET\s+([\s\S]+?)\s+WHERE/i);
+        if (insertMatch) {
+          table = insertMatch[1].replace(/`/g, '');
+          cols = insertMatch[2].split(',').map(c => c.trim().replace(/`/g, '').split(' ').pop()).filter(Boolean);
+        } else if (updateMatch) {
+          table = updateMatch[1].replace(/`/g, '');
+          const setPart = updateMatch[2];
+          cols = setPart.split(',').map(p => (p || '').split('=')[0].trim().replace(/`/g, '')).filter(Boolean);
+        }
+
+        if (table && cols.length) {
+          console.warn('Detected missing columns for table', table, 'attempting to add:', cols.join(','));
+          for (const c of cols) {
+            try {
+              await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${c}\` TEXT`);
+              console.log('Added column', c, 'to', table);
+            } catch (aerr) {
+              // ignore — column may already exist or ALTER not permitted
+            }
+          }
+          // retry the original query once
+          return await pool.execute(sql, params);
+        }
+      }
+    } catch (recoveryErr) {
+      // fall through to rethrow original error
+      console.warn('Auto-recovery attempt failed', recoveryErr && recoveryErr.message ? recoveryErr.message : recoveryErr);
+    }
+    throw err;
+  }
 }
 
 async function initDb() {
@@ -244,10 +284,11 @@ async function initDb() {
     for (let i = 0; i < 5; i++) {
       try {
         pool = mysql.createPool({
-          host: DB_HOST,
-          user: DB_USER,
-          password: DB_PASSWORD,
-          database: DB_DATABASE,
+          host: process.env.DB_HOST,
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD,
+          // Support both DB_NAME (older envs) and DB_DATABASE (current .env)
+          database: process.env.DB_NAME || process.env.DB_DATABASE || DB_DATABASE,
           waitForConnections: true,
           connectionLimit: 10,
           queueLimit: 0
@@ -338,6 +379,9 @@ async function initDb() {
       '  image TEXT,',
       '  link TEXT,',
       '  description TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
       '  active INTEGER DEFAULT 1,',
       '  position INTEGER DEFAULT 0,',
       '  views INTEGER DEFAULT 0,',
@@ -382,6 +426,9 @@ async function initDb() {
       '  name TEXT,',
       '  slug TEXT UNIQUE,',
       '  description TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
       '  position INTEGER DEFAULT 0,',
       '  active INTEGER DEFAULT 1,',
       "  created_at TEXT DEFAULT (datetime('now')),",
@@ -428,6 +475,9 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE comments ADD COLUMN up_votes INTEGER DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE comments ADD COLUMN down_votes INTEGER DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE comments ADD COLUMN image TEXT'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE categories ADD COLUMN meta_title TEXT'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE categories ADD COLUMN meta_description TEXT'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE categories ADD COLUMN keywords TEXT'); } catch (err) {}
 
     await dbQuery(sql([
       'CREATE TABLE IF NOT EXISTS comments (',
@@ -529,6 +579,9 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE blogs ADD COLUMN category_id INT DEFAULT NULL'); } catch (err) {}
     try { await dbQuery('ALTER TABLE blogs ADD COLUMN views INT DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE product_brands ADD COLUMN views INT DEFAULT 0'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE product_brands ADD COLUMN meta_title TEXT'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE product_brands ADD COLUMN meta_description TEXT'); } catch (err) {}
+    try { await dbQuery('ALTER TABLE product_brands ADD COLUMN keywords TEXT'); } catch (err) {}
     try { await dbQuery('ALTER TABLE blogs ADD COLUMN up_votes INT DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE blogs ADD COLUMN down_votes INT DEFAULT 0'); } catch (err) {}
     try { await dbQuery('ALTER TABLE comments ADD COLUMN parent_comment_id INT DEFAULT NULL'); } catch (err) {}
@@ -599,6 +652,9 @@ async function initDb() {
       '  image TEXT,',
       '  link TEXT,',
       '  description TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
       '  active BOOLEAN DEFAULT TRUE,',
       '  position INT DEFAULT 0,',
       '  views INT DEFAULT 0,',
@@ -643,6 +699,9 @@ async function initDb() {
       '  name VARCHAR(255),',
       '  slug VARCHAR(255) UNIQUE,',
       '  description TEXT,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  keywords TEXT,',
       '  position INT DEFAULT 0,',
       '  active BOOLEAN DEFAULT TRUE,',
       '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
@@ -702,6 +761,12 @@ async function initDb() {
         }
       }
     } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE categories ADD COLUMN meta_title TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE categories ADD COLUMN meta_description TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE categories ADD COLUMN keywords TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE product_brands ADD COLUMN meta_title TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE product_brands ADD COLUMN meta_description TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE product_brands ADD COLUMN keywords TEXT"); } } catch(e){}
 
     const [rows] = await dbQuery('SELECT * FROM admins LIMIT 1');
     if (rows.length === 0) {
@@ -909,6 +974,37 @@ app.get('/api/blogs', asyncHandler(async (req, res) => {
     ORDER BY b.created_at DESC
   `);
   const list = Array.isArray(rows) ? rows.map(row => hydrateBlogRow(row, req)) : [];
+  res.json(list);
+}));
+
+app.get('/api/blogs-lite', asyncHandler(async (req, res) => {
+  const contentExpr = useSqlite ? "substr(b.content, 1, 1500)" : "SUBSTRING(b.content, 1, 1500)";
+  const [rows] = await dbQuery(`
+    SELECT
+      b.id,
+      b.title,
+      b.slug,
+      b.summary,
+      ${contentExpr} AS content_preview,
+      b.author,
+      b.published,
+      b.created_at,
+      b.updated_at,
+      b.featured_image,
+      b.category,
+      b.category_id,
+      b.is_hero,
+      b.hero_order,
+      b.views,
+      b.up_votes,
+      b.down_votes
+    FROM blogs b
+    ORDER BY b.created_at DESC
+  `);
+  const list = Array.isArray(rows) ? rows.map(row => {
+    const hydrated = hydrateBlogRow(row, req);
+    return { ...hydrated, content_preview: row.content_preview || '' };
+  }) : [];
   res.json(list);
 }));
 
@@ -1710,6 +1806,33 @@ app.delete('/api/brand-strip/:id', authMiddleware, asyncHandler(async (req, res)
   res.json({ deleted: true });
 }));
 
+// Admin: overview / dashboard counts
+app.get('/api/admin/overview', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const [[blogsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM blogs');
+    const [[totalViewsRow]] = await dbQuery('SELECT COALESCE(SUM(views),0) AS c FROM blogs');
+    const [[commentsCountRow]] = await dbQuery("SELECT COUNT(*) AS c FROM comments");
+    const [[stripsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM brand_strip');
+    const [[brandsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM product_brands');
+    const [[pendingRequestsRow]] = await dbQuery("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'");
+
+    const [trendingRows] = await dbQuery(`SELECT b.id, b.title, b.slug, COALESCE(b.views,0) AS views, (SELECT COUNT(*) FROM comments WHERE blog_id = b.id AND status = 'approved') AS comments_count FROM blogs b ORDER BY COALESCE(b.views,0) DESC LIMIT 5`);
+
+    res.json({
+      blogs_count: Number((blogsCountRow && blogsCountRow.c) || 0),
+      total_blog_views: Number((totalViewsRow && totalViewsRow.c) || 0),
+      comments_count: Number((commentsCountRow && commentsCountRow.c) || 0),
+      strips_count: Number((stripsCountRow && stripsCountRow.c) || 0),
+      brands_count: Number((brandsCountRow && brandsCountRow.c) || 0),
+      brand_requests_pending: Number((pendingRequestsRow && pendingRequestsRow.c) || 0),
+      trending_blogs: Array.isArray(trendingRows) ? trendingRows : []
+    });
+  } catch (err) {
+    console.error('overview failed', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to fetch overview' });
+  }
+}));
+
 // Admin: list all categories (manage)
 app.get('/api/admin/categories', authMiddleware, asyncHandler(async (req, res) => {
   const [rows] = await dbQuery('SELECT * FROM categories ORDER BY position ASC');
@@ -1718,17 +1841,17 @@ app.get('/api/admin/categories', authMiddleware, asyncHandler(async (req, res) =
 
 // Admin: create category
 app.post('/api/categories', authMiddleware, asyncHandler(async (req, res) => {
-  const { name, slug: providedSlug, description, position, active } = req.body;
+  const { name, slug: providedSlug, description, meta_title, meta_description, keywords, position, active } = req.body;
   if (!name) return res.status(400).json({ error: 'Missing name' });
   const makeSlug = s => (s||'').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   const slug = providedSlug ? makeSlug(providedSlug) : makeSlug(name);
-  const params = [name, slug, description || '', Number(position || 0), active ? 1 : 0];
+  const params = [name, slug, description || '', meta_title || '', meta_description || '', keywords || '', Number(position || 0), active ? 1 : 0];
   let newId;
   if (useSqlite) {
-    const [info] = await dbQuery('INSERT INTO categories (name, slug, description, position, active) VALUES (?, ?, ?, ?, ?)', params);
+    const [info] = await dbQuery('INSERT INTO categories (name, slug, description, meta_title, meta_description, keywords, position, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = info.lastInsertRowid;
   } else {
-    const [result] = await dbQuery('INSERT INTO categories (name, slug, description, position, active) VALUES (?, ?, ?, ?, ?)', params);
+    const [result] = await dbQuery('INSERT INTO categories (name, slug, description, meta_title, meta_description, keywords, position, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = result.insertId;
   }
   const [rows] = await dbQuery('SELECT * FROM categories WHERE id = ? LIMIT 1', [newId]);
@@ -1738,11 +1861,11 @@ app.post('/api/categories', authMiddleware, asyncHandler(async (req, res) => {
 // Admin: update category
 app.put('/api/categories/:id', authMiddleware, asyncHandler(async (req, res) => {
   const id = req.params.id;
-  const { name, slug: providedSlug, description, position, active } = req.body;
+  const { name, slug: providedSlug, description, meta_title, meta_description, keywords, position, active } = req.body;
   if (!name) return res.status(400).json({ error: 'Missing name' });
   const makeSlug = s => (s||'').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   const slug = providedSlug ? makeSlug(providedSlug) : makeSlug(name);
-  await dbQuery('UPDATE categories SET name = ?, slug = ?, description = ?, position = ?, active = ? WHERE id = ?', [name, slug, description || '', Number(position||0), active ? 1 : 0, id]);
+  await dbQuery('UPDATE categories SET name = ?, slug = ?, description = ?, meta_title = ?, meta_description = ?, keywords = ?, position = ?, active = ? WHERE id = ?', [name, slug, description || '', meta_title || '', meta_description || '', keywords || '', Number(position||0), active ? 1 : 0, id]);
   const [rows] = await dbQuery('SELECT * FROM categories WHERE id = ? LIMIT 1', [id]);
   res.json(rows[0]);
 }));
@@ -1795,15 +1918,15 @@ app.delete('/api/news/:id', authMiddleware, asyncHandler(async (req, res) => {
 
 // Admin: create brand
 app.post('/api/brands', authMiddleware, asyncHandler(async (req, res) => {
-  const { title, image, link, description, active, position } = req.body;
+  const { title, image, link, description, meta_title, meta_description, keywords, active, position } = req.body;
   if (!title) return res.status(400).json({ error: 'Missing title' });
-  const params = [title, image || '', link || '', description || '', active ? 1 : 0, Number(position || 0)];
+  const params = [title, image || '', link || '', description || '', meta_title || '', meta_description || '', keywords || '', active ? 1 : 0, Number(position || 0)];
   let newId;
   if (useSqlite) {
-    const [info] = await dbQuery('INSERT INTO product_brands (title, image, link, description, active, position) VALUES (?, ?, ?, ?, ?, ?)', params);
+    const [info] = await dbQuery('INSERT INTO product_brands (title, image, link, description, meta_title, meta_description, keywords, active, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = info.lastInsertRowid;
   } else {
-    const [result] = await dbQuery('INSERT INTO product_brands (title, image, link, description, active, position) VALUES (?, ?, ?, ?, ?, ?)', params);
+    const [result] = await dbQuery('INSERT INTO product_brands (title, image, link, description, meta_title, meta_description, keywords, active, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = result.insertId;
   }
   const [rows] = await dbQuery('SELECT * FROM product_brands WHERE id = ? LIMIT 1', [newId]);
@@ -1813,8 +1936,8 @@ app.post('/api/brands', authMiddleware, asyncHandler(async (req, res) => {
 // Admin: update brand
 app.put('/api/brands/:id', authMiddleware, asyncHandler(async (req, res) => {
   const id = req.params.id;
-  const { title, image, link, description, active, position } = req.body;
-  await dbQuery('UPDATE product_brands SET title = ?, image = ?, link = ?, description = ?, active = ?, position = ? WHERE id = ?', [title || '', image || '', link || '', description || '', active ? 1 : 0, Number(position||0), id]);
+  const { title, image, link, description, meta_title, meta_description, keywords, active, position } = req.body;
+  await dbQuery('UPDATE product_brands SET title = ?, image = ?, link = ?, description = ?, meta_title = ?, meta_description = ?, keywords = ?, active = ?, position = ? WHERE id = ?', [title || '', image || '', link || '', description || '', meta_title || '', meta_description || '', keywords || '', active ? 1 : 0, Number(position||0), id]);
   const [rows] = await dbQuery('SELECT * FROM product_brands WHERE id = ? LIMIT 1', [id]);
   res.json(rows[0]);
 }));
@@ -1828,15 +1951,15 @@ app.delete('/api/brands/:id', authMiddleware, asyncHandler(async (req, res) => {
 
 // Public: submit a brand entry for admin review (inactive by default)
 app.post('/api/brands-public', asyncHandler(async (req, res) => {
-  const { title, image, link, description } = req.body;
+  const { title, image, link, description, meta_title, meta_description, keywords } = req.body;
   if (!title || !description) return res.status(400).json({ error: 'Missing title or description' });
-  const params = [title || '', image || '', link || '', description || '', 0, 0];
+  const params = [title || '', image || '', link || '', description || '', meta_title || '', meta_description || '', keywords || '', 0, 0];
   let newId;
   if (useSqlite) {
-    const [info] = await dbQuery('INSERT INTO product_brands (title, image, link, description, active, position) VALUES (?, ?, ?, ?, ?, ?)', params);
+    const [info] = await dbQuery('INSERT INTO product_brands (title, image, link, description, meta_title, meta_description, keywords, active, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = info.lastInsertRowid;
   } else {
-    const [result] = await dbQuery('INSERT INTO product_brands (title, image, link, description, active, position) VALUES (?, ?, ?, ?, ?, ?)', params);
+    const [result] = await dbQuery('INSERT INTO product_brands (title, image, link, description, meta_title, meta_description, keywords, active, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', params);
     newId = result.insertId;
   }
   const [rows] = await dbQuery('SELECT * FROM product_brands WHERE id = ? LIMIT 1', [newId]);
