@@ -29,8 +29,10 @@ app.use(cors());
 // Increase body size limits to allow large editor payloads (HTML with inline images, etc.)
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
-// static uploads
-app.use('/uploads', express.static(path.join(__dirname, '..', 'data', 'uploads')));
+// static uploads (serve from backend/uploads)
+const uploadsStaticDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsStaticDir)) fs.mkdirSync(uploadsStaticDir, { recursive: true });
+app.use('/uploads', express.static(uploadsStaticDir));
 
 // simple settings stored in data/settings.json (admin editable)
 const settingsFile = path.join(__dirname, '..', 'data', 'settings.json');
