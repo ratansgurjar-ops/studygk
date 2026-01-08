@@ -1759,6 +1759,15 @@ app.post('/api/hit/brand/:id', asyncHandler(async (req, res) => {
   res.json({ id, views: v });
 }));
 
+// Public: increment and return brand strip item views
+app.post('/api/hit/brand-strip/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id;
+  await dbQuery('UPDATE brand_strip SET views = COALESCE(views,0) + 1 WHERE id = ?', [id]);
+  const [rows] = await dbQuery('SELECT views FROM brand_strip WHERE id = ? LIMIT 1', [id]);
+  const v = rows && rows[0] ? Number(rows[0].views || 0) : 0;
+  res.json({ id, views: v });
+}));
+
 // Brand strip (horizontal) - public list
 app.get('/api/brand-strip', asyncHandler(async (req, res) => {
   const [rows] = await dbQuery('SELECT * FROM brand_strip WHERE active = 1 ORDER BY position ASC, created_at DESC');
@@ -1810,29 +1819,41 @@ app.delete('/api/brand-strip/:id', authMiddleware, asyncHandler(async (req, res)
 
 // Admin: overview / dashboard counts
 app.get('/api/admin/overview', authMiddleware, asyncHandler(async (req, res) => {
-  try {
-    const [[blogsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM blogs');
-    const [[totalViewsRow]] = await dbQuery('SELECT COALESCE(SUM(views),0) AS c FROM blogs');
-    const [[commentsCountRow]] = await dbQuery("SELECT COUNT(*) AS c FROM comments");
-    const [[stripsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM brand_strip');
-    const [[brandsCountRow]] = await dbQuery('SELECT COUNT(*) AS c FROM product_brands');
-    const [[pendingRequestsRow]] = await dbQuery("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'");
+  // run each query defensively so a missing table doesn't break the entire overview
+  const safe = async (q, params) => {
+    try {
+      const result = await dbQuery(q, params || []);
+      // dbQuery returns [rows, fields] for SQL DBs, or [rows, undefined] for sqlite
+      if (Array.isArray(result) && result.length > 0) return result[0];
+      return result;
+    } catch (e) {
+      console.warn('overview subquery failed', q, e && e.message ? e.message : e);
+      return null;
+    }
+  };
 
-    const [trendingRows] = await dbQuery(`SELECT b.id, b.title, b.slug, COALESCE(b.views,0) AS views, (SELECT COUNT(*) FROM comments WHERE blog_id = b.id AND status = 'approved') AS comments_count FROM blogs b ORDER BY COALESCE(b.views,0) DESC LIMIT 5`);
+  const blogsCountRow = (await safe('SELECT COUNT(*) AS c FROM blogs')) ? (await safe('SELECT COUNT(*) AS c FROM blogs'))[0] : null;
+  const totalViewsRow = (await safe('SELECT COALESCE(SUM(views),0) AS c FROM blogs')) ? (await safe('SELECT COALESCE(SUM(views),0) AS c FROM blogs'))[0] : null;
+  const commentsCountRow = (await safe("SELECT COUNT(*) AS c FROM comments")) ? (await safe("SELECT COUNT(*) AS c FROM comments"))[0] : null;
+  const stripsCountRow = (await safe('SELECT COUNT(*) AS c FROM brand_strip')) ? (await safe('SELECT COUNT(*) AS c FROM brand_strip'))[0] : null;
+  const brandsCountRow = (await safe('SELECT COUNT(*) AS c FROM product_brands')) ? (await safe('SELECT COUNT(*) AS c FROM product_brands'))[0] : null;
+  const pendingRequestsRow = (await safe("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'")) ? (await safe("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'"))[0] : null;
 
-    res.json({
-      blogs_count: Number((blogsCountRow && blogsCountRow.c) || 0),
-      total_blog_views: Number((totalViewsRow && totalViewsRow.c) || 0),
-      comments_count: Number((commentsCountRow && commentsCountRow.c) || 0),
-      strips_count: Number((stripsCountRow && stripsCountRow.c) || 0),
-      brands_count: Number((brandsCountRow && brandsCountRow.c) || 0),
-      brand_requests_pending: Number((pendingRequestsRow && pendingRequestsRow.c) || 0),
-      trending_blogs: Array.isArray(trendingRows) ? trendingRows : []
-    });
-  } catch (err) {
-    console.error('overview failed', err && err.message ? err.message : err);
-    res.status(500).json({ error: 'Failed to fetch overview' });
-  }
+  const trendingRows = await safe(`SELECT b.id, b.title, b.slug, COALESCE(b.views,0) AS views, (SELECT COUNT(*) FROM comments WHERE blog_id = b.id AND status = 'approved') AS comments_count FROM blogs b ORDER BY COALESCE(b.views,0) DESC LIMIT 5`);
+  const stripTop = await safe(`SELECT id, title, slug, COALESCE(views,0) AS views FROM brand_strip ORDER BY COALESCE(views,0) DESC LIMIT 10`);
+  const brandTop = await safe(`SELECT id, title, link, COALESCE(views,0) AS views FROM product_brands ORDER BY COALESCE(views,0) DESC LIMIT 10`);
+
+  res.json({
+    blogs_count: Number((blogsCountRow && blogsCountRow.c) || 0),
+    total_blog_views: Number((totalViewsRow && totalViewsRow.c) || 0),
+    comments_count: Number((commentsCountRow && commentsCountRow.c) || 0),
+    strips_count: Number((stripsCountRow && stripsCountRow.c) || 0),
+    brands_count: Number((brandsCountRow && brandsCountRow.c) || 0),
+    brand_requests_pending: Number((pendingRequestsRow && pendingRequestsRow.c) || 0),
+    trending_blogs: Array.isArray(trendingRows) ? trendingRows : [],
+    top_brand_strip: Array.isArray(stripTop) ? stripTop : [],
+    top_product_brands: Array.isArray(brandTop) ? brandTop : []
+  });
 }));
 
 // Admin: list all categories (manage)
