@@ -62,7 +62,6 @@ export default function App(){
   const [route, setRoute] = useState(()=>normalizeRoutePath(window.location.pathname))
   const [categories, setCategories] = useState([])
   const [search, setSearch] = useState('')
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   useEffect(()=>{
     const onPop = ()=> setRoute(normalizeRoutePath(window.location.pathname))
     window.addEventListener('popstate', onPop)
@@ -97,7 +96,7 @@ export default function App(){
 
   const pathOnly = route || '/'
   const isAdmin = pathOnly === '/ratan'
-  const staticPaths = new Set(['/request', '/terms', '/policy', '/about', '/contact', '/ratans'])
+  const staticPaths = new Set(['/request', '/terms', '/policy', '/about', '/ratans'])
   const isPostRoute = pathOnly.startsWith('/posts/')
   const rawDynamicSlug = !isAdmin && !staticPaths.has(pathOnly) && !isPostRoute && pathOnly !== '/' ? safeDecode(pathOnly.slice(1)) : ''
   const dynamicSlug = normalizeDynamicSlug(rawDynamicSlug) || rawDynamicSlug
@@ -132,6 +131,11 @@ export default function App(){
                 <input aria-label="Search posts" className="search-input header-search" placeholder="Search posts" value={search} onChange={e=>setSearch(e.target.value)} />
                 <button className="nav-btn header-request" onClick={()=>nav('/request')}>Request Free Feature</button>
               </div>
+            </div>
+          </div>
+
+          <div className="header-bottom">
+            <div className="header-inner">
               {/* Mobile categories quick access (visible on small screens) */}
               <div className="mobile-only-cat">
                 <div className="cat-nav">
@@ -140,11 +144,6 @@ export default function App(){
                   ))}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="header-bottom">
-            <div className="header-inner">
               <nav className="nav">
                 <button className="nav-btn" onClick={()=>nav('/')}>Home</button>
                 <div className="cat-nav" aria-label="Categories">
@@ -185,26 +184,7 @@ export default function App(){
               <button className="footer-cta-btn" onClick={()=>nav('/request')} style={{padding:'10px 14px',fontSize:14}}>Get Free Feature</button>
             </div>
           </div>
-              <button className="hamburger-btn" aria-label="Menu" onClick={()=>setMobileMenuOpen(v=>!v)}>
-                <span style={{display:'block',width:20,height:2,background:'#fff',marginBottom:4}} />
-                <span style={{display:'block',width:16,height:2,background:'#fff',marginBottom:4}} />
-                <span style={{display:'block',width:12,height:2,background:'#fff'}} />
-              </button>
 
-            {/* Mobile menu: contains search, request and categories */}
-            <div className={`mobile-menu ${mobileMenuOpen ? 'open' : ''}`}>
-              <div style={{padding:10}}>
-                <input aria-label="Search posts" className="search-input" placeholder="Search posts" value={search} onChange={e=>setSearch(e.target.value)} />
-                <div style={{marginTop:8}}>
-                  <button className="nav-btn header-request" onClick={()=>{ setMobileMenuOpen(false); nav('/request') }}>Request Free Feature</button>
-                </div>
-                <div style={{marginTop:12}} className="cat-nav">
-                  {categories.map(c => (
-                    <button key={c} className={`cat-btn ${getSelectedCategory()===c ? 'active' : ''}`} onClick={()=>{ setMobileMenuOpen(false); nav('/?category='+encodeURIComponent(c)) }}>{c}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
             <div style={{textAlign:'center', padding:12, fontSize:15}}>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/about')}>About!</span>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/terms')}>Terms!</span>
