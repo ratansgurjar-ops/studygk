@@ -100,6 +100,43 @@ function Overview({ token }){
           </table>
         ) : <div style={{color:'#666'}}>No trending blogs yet.</div>}
       </div>
+      <div style={{gridColumn:'1/-1',padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)',marginTop:12}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Top Brand Strip Items (by clicks)</div>
+        {Array.isArray(data.top_brand_strip) && data.top_brand_strip.length ? (
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr><th style={{textAlign:'left',padding:8}}>Title</th><th style={{padding:8}}>Views</th></tr>
+            </thead>
+            <tbody>
+              {data.top_brand_strip.map(b=> (
+                <tr key={b.id} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
+                  <td style={{padding:8}}>{b.title}</td>
+                  <td style={{padding:8,textAlign:'center'}}>{b.views || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div style={{color:'#666'}}>No brand strip clicks recorded yet.</div>}
+      </div>
+
+      <div style={{gridColumn:'1/-1',padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)',marginTop:12}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Top Product Brands (by clicks)</div>
+        {Array.isArray(data.top_product_brands) && data.top_product_brands.length ? (
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr><th style={{textAlign:'left',padding:8}}>Title</th><th style={{padding:8}}>Views</th></tr>
+            </thead>
+            <tbody>
+              {data.top_product_brands.map(b=> (
+                <tr key={b.id} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
+                  <td style={{padding:8}}>{b.title}</td>
+                  <td style={{padding:8,textAlign:'center'}}>{b.views || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div style={{color:'#666'}}>No product brand clicks recorded yet.</div>}
+      </div>
     </div>
   )
 }
@@ -157,6 +194,7 @@ export default function Admin(){
   const perPage = 6
   const [form, setForm] = useState({title:'', summary:'', content:'', published:false, slug:'', meta_title:'', meta_description:'', keywords:'', featured_image:'', category:'', is_hero:false, hero_order:0})
   const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
   const setFormContent = (html) => setForm(prev => ({ ...prev, content: html }))
   const [editingId, setEditingId] = useState(null)
   const [pasteHtmlVisible, setPasteHtmlVisible] = useState(false)
@@ -1729,7 +1767,11 @@ function BrandingStripManager({ token }){
       const res = await fetch('/api/upload-rename', { method:'POST', headers: { 'Authorization': 'Bearer ' + (token||'') }, body: fd });
       const d = await res.json();
       if (res.ok && d.url) {
-        setForm(prev=>({ ...prev, image: d.url }));
+        // cache-bust to force fresh preview
+        const urlWithBust = d.url + '?_=' + Date.now();
+        setForm(prev=>({ ...prev, image: urlWithBust }));
+        // clear the file input so re-selecting same file will trigger change
+        try { if (fileInputRef && fileInputRef.current) fileInputRef.current.value = '' } catch(e){}
         if (!rawSlug && sanitized) {
           setFormExt(prev=> ({ ...prev, slug: sanitized }));
         }
@@ -1841,8 +1883,8 @@ function BrandingStripManager({ token }){
             </div>
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
-            <input type="file" accept="image/*" onChange={handleUpload} />
-            <button type="button" onClick={()=>setForm({...form,image:''})}>Remove</button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} />
+            <button type="button" onClick={()=>{ setForm({...form,image:''}); try { if (fileInputRef && fileInputRef.current) fileInputRef.current.value = '' }catch(e){} }}>Remove</button>
           </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8}}>

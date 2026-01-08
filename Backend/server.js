@@ -87,7 +87,7 @@ function normalizePageSlug(value) {
       slug = slug.slice(firstSlash + 1);
     }
   }
-  const hashIndex = slug.indexOf('#');
+const hashIndex = slug.indexOf('#');
   if (hashIndex >= 0) slug = slug.slice(0, hashIndex);
   const queryIndex = slug.indexOf('?');
   if (queryIndex >= 0) slug = slug.slice(0, queryIndex);
@@ -164,10 +164,8 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 15 * 1024 * 1024 }
-});
+// multer instance used by upload routes
+const upload = multer({ storage, limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Save a base64 data URL or remote image URL into the uploads folder and
 // return a server-relative path (served under /uploads).
@@ -254,30 +252,56 @@ async function dbQuery(sql, params = []) {
   try {
     return await pool.execute(sql, params);
   } catch (err) {
-    // If a MySQL 'unknown column' error occurs, attempt to add the missing columns
-    // for common INSERT INTO / UPDATE statements and retry once.
+    // Attempt recovery for common MySQL errors
     try {
-      if (err && err.code === 'ER_BAD_FIELD_ERROR' && typeof sql === 'string') {
+      // If data too long for a column, try to ALTER that column to LONGTEXT then retry
+      if (err && (err.code === 'ER_DATA_TOO_LONG' || err.errno === 1406) && typeof sql === 'string' && pool) {
+        const msg = String(err && err.message || '');
+        const colMatch = msg.match(/Data too long for column '(.*?)'/i);
+        const column = colMatch ? colMatch[1] : null;
+        // Try to infer table from INSERT/UPDATE SQL
         const s = sql;
         let table = null;
+        const insertMatch = s.match(/INSERT\s+INTO\s+([`\w]+)\s*\(/i);
+        const updateMatch = s.match(/UPDATE\s+([`\w]+)\s+/i);
+        if (insertMatch) table = insertMatch[1].replace(/`/g, '');
+        else if (updateMatch) table = updateMatch[1].replace(/`/g, '');
+
+        if (table && column) {
+          try {
+            console.warn('Data too long for', table + '.' + column, '- attempting to ALTER to LONGTEXT');
+            await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` LONGTEXT`);
+            // retry the original query once
+            return await pool.execute(sql, params);
+          } catch (alterErr) {
+            console.warn('Failed to ALTER column to LONGTEXT', alterErr && alterErr.message ? alterErr.message : alterErr);
+          }
+        }
+      }
+
+      // If a MySQL 'unknown column' error occurs, attempt to add the missing columns
+      // for common INSERT INTO / UPDATE statements and retry once.
+      if (err && err.code === 'ER_BAD_FIELD_ERROR' && typeof sql === 'string') {
+        const s2 = sql;
+        let table2 = null;
         let cols = [];
-        const insertMatch = s.match(/INSERT\s+INTO\s+([`\w]+)\s*\(([^)]+)\)/i);
-        const updateMatch = s.match(/UPDATE\s+([`\w]+)\s+SET\s+([\s\S]+?)\s+WHERE/i);
-        if (insertMatch) {
-          table = insertMatch[1].replace(/`/g, '');
-          cols = insertMatch[2].split(',').map(c => c.trim().replace(/`/g, '').split(' ').pop()).filter(Boolean);
-        } else if (updateMatch) {
-          table = updateMatch[1].replace(/`/g, '');
-          const setPart = updateMatch[2];
+        const insertMatch2 = s2.match(/INSERT\s+INTO\s+([`\w]+)\s*\(([^)]+)\)/i);
+        const updateMatch2 = s2.match(/UPDATE\s+([`\w]+)\s+SET\s+([\s\S]+?)\s+WHERE/i);
+        if (insertMatch2) {
+          table2 = insertMatch2[1].replace(/`/g, '');
+          cols = insertMatch2[2].split(',').map(c => c.trim().replace(/`/g, '').split(' ').pop()).filter(Boolean);
+        } else if (updateMatch2) {
+          table2 = updateMatch2[1].replace(/`/g, '');
+          const setPart = updateMatch2[2];
           cols = setPart.split(',').map(p => (p || '').split('=')[0].trim().replace(/`/g, '')).filter(Boolean);
         }
 
-        if (table && cols.length) {
-          console.warn('Detected missing columns for table', table, 'attempting to add:', cols.join(','));
+        if (table2 && cols.length) {
+          console.warn('Detected missing columns for table', table2, 'attempting to add:', cols.join(','));
           for (const c of cols) {
             try {
-              await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${c}\` TEXT`);
-              console.log('Added column', c, 'to', table);
+              await pool.query(`ALTER TABLE \`${table2}\` ADD COLUMN \`${c}\` TEXT`);
+              console.log('Added column', c, 'to', table2);
             } catch (aerr) {
               // ignore — column may already exist or ALTER not permitted
             }

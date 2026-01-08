@@ -35,6 +35,16 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 .header-request{background:transparent;color:#ffffff;border:1px solid rgb(254, 254, 254);padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700}
 .header-request:hover{background:rgba(244, 242, 242, 0.06);filter:none}
 
+/* Navy-transparent variant for use on white backgrounds (e.g. hero strip) */
+.header-request.navy, .header-request--navy{
+	background: rgba(7,62,168,0.12);
+	color: #f3f4f6;
+	border-color: rgba(7,62,168,0.18);
+}
+.header-request.navy:hover, .header-request--navy:hover{
+	background: rgba(7,62,168,0.16);
+}
+
 /* Higher-specificity override so the request button remains white even when
 	 the element also has `.nav-btn` which sets a different color. */
 .header-top .header-request, .header-top .nav-btn.header-request{
@@ -56,14 +66,6 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 
 /* mobile-only category container in header-top */
 .mobile-only-cat{display:none;padding-top:8px}
-
-/* Hamburger and mobile menu styles */
-.hamburger-btn{display:none;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.12);background:transparent;padding:8px;border-radius:8px;cursor:pointer;margin-left:8px}
-.hamburger-btn span{display:block}
-.mobile-menu{display:none;position:absolute;left:0;right:0;top:100%;background:#ffffff;border-top:1px solid rgba(2,6,23,0.06);z-index:70}
-.mobile-menu.open{display:block}
-.mobile-menu .cat-nav{display:flex;flex-wrap:wrap;gap:8px;padding-top:8px}
-.mobile-menu .search-input{width:100%}
 
 .cat-btn{background:transparent;border:1px solid rgba(37,99,235,0.12);padding:6px 10px;border-radius:999px;color:#073ea8;cursor:pointer;white-space:nowrap}
 .cat-btn.active{border-color:var(--accent);background:rgba(37,99,235,0.06);color:#073ea8}
@@ -149,15 +151,18 @@ article{box-shadow:0 1px 2px rgba(16,24,40,0.04)}
 	.post-thumb{width:100%;min-width:0;height:180px}
 }
 
-@media (max-width:900px){
-  .hamburger-btn{display:inline-flex}
-  .header-actions .header-search{display:none}
-  .header-actions .header-request{display:none}
-}
-
 @media (max-width:600px){
   .mobile-only-cat{display:block}
   .mobile-only-cat .cat-nav{padding:6px 0}
+}
+
+/* Hide desktop category bar on small screens to avoid duplicate category rows */
+@media (max-width:600px){
+	.header-bottom .nav .cat-nav { display: none; }
+	.header-bottom .header-inner { padding: 6px 12px; }
+	.header-top .header-inner { padding: 8px 12px; }
+	.logo-sub, .logo-tagline { display: none; }
+	.header-actions { gap: 6px; }
 }
 
 @media (max-width:900px){
