@@ -20,6 +20,24 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false
         }
+          ,
+          '/sitemap.xml': {
+            target,
+            changeOrigin: true,
+            secure: false
+            },
+          '/general-knowledge/sitemap.xml': {
+            target,
+            changeOrigin: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/general-knowledge\/sitemap.xml/, '/general-knowledge/sitemap.xml')
+          },
+          '/currentaffairs/sitemap.xml': {
+            target,
+            changeOrigin: true,
+            secure: false,
+            rewrite: (path) => path.replace(/^\/currentaffairs\/sitemap.xml/, '/currentaffairs/sitemap.xml')
+          }
       }
     }
   }

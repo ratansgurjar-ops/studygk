@@ -257,6 +257,8 @@ export default function Home({ search, setSearch }){
         </div>
       ) }
 
+      {/* GK Practice top CTA removed per request */}
+
       {showHeroOnMain && (
         <section className="hero">
           <div className="hero-inner">

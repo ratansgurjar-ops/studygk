@@ -3,6 +3,7 @@ import ReactQuill from 'react-quill'
 import 'react-quill/dist/quill.snow.css'
 import JoditEditor from 'jodit-react'
 import 'jodit/build/jodit.min.css'
+import AdminGK from '../components/AdminGK'
 
 function normalizePageSlugInput(value) {
   if (value === undefined || value === null) return ''
@@ -39,7 +40,7 @@ function normalizePageSlugInput(value) {
   return slug
 }
 
-function Overview({ token }){
+function Overview({ token, onViewCategory }){
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   useEffect(()=>{ fetchOverview() }, [])
@@ -60,6 +61,59 @@ function Overview({ token }){
         <div style={{fontSize:12,color:'#6b7280'}}>Blogs</div>
         <div style={{fontSize:20,fontWeight:700}}>{data.blogs_count}</div>
       </div>
+      {data && (data.questions_by_category && (Array.isArray(data.questions_by_category) || typeof data.questions_by_category === 'object')) && (
+        <div style={{gridColumn:'1/-1',padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)',marginTop:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <div style={{fontSize:14,fontWeight:700}}>Questions by category</div>
+            <div style={{fontSize:12,color:'#6b7280'}}>Click View to open GK manager filtered by category</div>
+          </div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr>
+                  <th style={{textAlign:'left',padding:8}}>Category</th>
+                  <th style={{padding:8}}>Count</th>
+                  <th style={{padding:8}}>Views</th>
+                </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const raw = Array.isArray(data.questions_by_category) ? data.questions_by_category : Object.entries(data.questions_by_category || {})
+                const rows = []
+                raw.forEach(row => {
+                  let cat = ''
+                  let cnt = 0
+                  let views = 0
+                  if (Array.isArray(row)){
+                    cat = row[0]
+                    const v = row[1]
+                    if (typeof v === 'number') cnt = v
+                    else if (v && typeof v === 'object'){
+                      cnt = v.c ?? v.count ?? v.qty ?? v.total ?? 0
+                      views = v.views ?? v.hits ?? v.total_views ?? 0
+                    }
+                  } else if (row && typeof row === 'object'){
+                    cat = row.category ?? row[0] ?? ''
+                    cnt = row.c ?? row.count ?? row.qty ?? row.total ?? 0
+                    views = row.views ?? row.hits ?? row.total_views ?? 0
+                  }
+                  rows.push({ category: String(cat || '').trim(), count: Number(cnt || 0), views: Number(views || 0) })
+                })
+                // Ensure Current Affairs row exists
+                if (!rows.some(r => (r.category || '').toLowerCase() === 'current affairs')){
+                  rows.unshift({ category: 'Current Affairs', count: 0, views: 0 })
+                }
+                return rows.map(r => (
+                  <tr key={String(r.category)} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
+                    <td style={{padding:8}}>{r.category || '(Uncategorized)'}</td>
+                    <td style={{padding:8,textAlign:'center'}}>{r.count}</td>
+                    <td style={{padding:8,textAlign:'center'}}>{r.views}</td>
+                  </tr>
+                ))
+              })()}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
         <div style={{fontSize:12,color:'#6b7280'}}>Total Blog Views</div>
         <div style={{fontSize:20,fontWeight:700}}>{data.total_blog_views}</div>
@@ -79,6 +133,10 @@ function Overview({ token }){
       <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
         <div style={{fontSize:12,color:'#6b7280'}}>Pending Brand Requests</div>
         <div style={{fontSize:20,fontWeight:700}}>{data.brand_requests_pending}</div>
+      </div>
+      <div style={{padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
+        <div style={{fontSize:12,color:'#6b7280'}}>Current Affairs Questions</div>
+        <div style={{fontSize:20,fontWeight:700}}>{data.current_affairs_questions_count || 0}</div>
       </div>
 
       <div style={{gridColumn:'1/-1',padding:12,background:'#fff',borderRadius:8,boxShadow:'0 1px 0 rgba(2,6,23,0.04)'}}>
@@ -212,6 +270,7 @@ export default function Admin(){
 
   useEffect(()=>{ if (token) { fetchBlogs() } }, [token])
   const [activePanel, setActivePanel] = useState('blogs')
+  const [initialGKCategory, setInitialGKCategory] = useState('')
   const [requests, setRequests] = useState([])
   const [categories, setCategories] = useState([])
   const [stripList, setStripList] = useState([])
@@ -688,6 +747,8 @@ export default function Admin(){
               <button className={`side-btn ${activePanel==='requests'?'active':''}`} onClick={()=>setActivePanel('requests')}>Brand Requests <span className="badge">{requests.length}</span></button>
               <button className={`side-btn ${activePanel==='categories'?'active':''}`} onClick={()=>{ setActivePanel('categories'); fetchAdminCategories(); }}>Categories</button>
               <button className={`side-btn ${activePanel==='comments'?'active':''}`} onClick={()=>{ setActivePanel('comments'); fetchAdminComments({ status: commentStatusFilter, blog_id: commentBlogFilter }); }}>Comments</button>
+              <button className={`side-btn ${activePanel==='questions'?'active':''}`} onClick={()=>{ setActivePanel('questions'); }}>GK Questions</button>
+              <button className={`side-btn ${activePanel==='current-affairs'?'active':''}`} onClick={()=>{ setActivePanel('current-affairs'); }}>Current Affairs</button>
               <button className={`side-btn ${activePanel==='settings'?'active':''}`} onClick={()=>setActivePanel('settings')}>Settings</button>
               <div style={{marginTop:12}}><button onClick={logout}>Logout</button></div>
             </div>
@@ -698,7 +759,51 @@ export default function Admin(){
               <SettingsPanel token={token} />
             )}
             
+            {activePanel === 'questions' && (
+              <AdminGK token={token} initialCategoryFilter={initialGKCategory} />
+            )}
 
+            {activePanel === 'current-affairs' && (
+              <div>
+                <h2>Current Affairs Management</h2>
+                <p className="muted">Manage multiple-choice questions in the <strong>Current Affairs</strong> category. Use the filters to edit chapters, search text, or bulk import questions. You can also export the current list as CSV.</p>
+                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
+                  <button type="button" onClick={async ()=>{
+                    try{
+                      const q = new URLSearchParams({ category: 'Current Affairs', limit: '10000' })
+                      const res = await fetch('/api/questions?'+q.toString(), { headers: { 'Authorization': 'Bearer ' + (token || '') } })
+                      if (!res.ok) { const b = await res.json().catch(()=>({})); return alert(b.error || 'Failed to fetch questions') }
+                      const data = await res.json()
+                      const items = Array.isArray(data.items) ? data.items : []
+                      if (!items.length) return alert('No Current Affairs questions found')
+                      const headers = ['id','question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution']
+                      const escapeCell = (v) => {
+                        if (v === null || v === undefined) return ''
+                        const s = String(v)
+                        if (s.includes('"') || s.includes(',') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"'
+                        return s
+                      }
+                      const rows = [headers.join(',')]
+                      for (const it of items){
+                        const row = headers.map(h => escapeCell(it[h] || ''))
+                        rows.push(row.join(','))
+                      }
+                      const csv = rows.join('\n')
+                      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = 'current-affairs-questions.csv'
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      URL.revokeObjectURL(url)
+                    }catch(err){ console.error(err); alert('Export failed') }
+                  }}>Export CSV</button>
+                </div>
+                <AdminGK token={token} initialCategoryFilter={'Current Affairs'} />
+              </div>
+            )}
             {activePanel === 'blogs' && (
               <div>
                 <h2>Blog Management</h2>
@@ -1085,7 +1190,7 @@ export default function Admin(){
             {activePanel === 'overview' && (
               <div>
                 <h2>Overview</h2>
-                <Overview token={token} />
+                <Overview token={token} onViewCategory={(cat)=>{ setInitialGKCategory(cat || ''); setActivePanel('questions') }} />
               </div>
             )}
 

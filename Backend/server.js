@@ -122,6 +122,13 @@ function appendPageSlugSuffix(baseSlug, suffix) {
 }
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+// Centralised request logger (avoid noisy logs in production)
+function logInfo(...args) {
+  if (process.env.NODE_ENV !== 'production') {
+    try { console.log(...args); } catch (_) {}
+  }
+}
+
 function escapeHtml(str){
   if (str === undefined || str === null) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -301,7 +308,7 @@ async function dbQuery(sql, params = []) {
           for (const c of cols) {
             try {
               await pool.query(`ALTER TABLE \`${table2}\` ADD COLUMN \`${c}\` TEXT`);
-              console.log('Added column', c, 'to', table2);
+              logInfo('Added column', c, 'to', table2);
             } catch (aerr) {
               // ignore — column may already exist or ALTER not permitted
             }
@@ -336,10 +343,10 @@ async function initDb() {
         const conn = await pool.getConnection();
         await conn.ping();
         conn.release();
-        console.log('Connected to MySQL');
+        logInfo('Connected to MySQL');
         break;
       } catch (err) {
-        console.log('Waiting for MySQL... retry', i+1);
+        logInfo('Waiting for MySQL... retry', i+1);
         await new Promise(r => setTimeout(r, 2000));
       }
     }
@@ -353,7 +360,7 @@ async function initDb() {
       const dbFile = path.join(dataDir, 'studygk.db');
       sqlite = new Database(dbFile);
       useSqlite = true;
-      console.log('Using SQLite fallback at', dbFile);
+      logInfo('Using SQLite fallback at', dbFile);
     } catch (err) {
       console.error('No database connection available', err && err.message ? err.message : err);
       throw new Error('Database initialisation failed');
@@ -459,6 +466,7 @@ async function initDb() {
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN meta_title TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN meta_description TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN keywords TEXT'); } catch(e){}
+    try { await dbQuery('ALTER TABLE brand_strip ADD COLUMN views INTEGER DEFAULT 0'); } catch(e){}
 
     await dbQuery(sql([
       'CREATE TABLE IF NOT EXISTS categories (',
@@ -538,16 +546,52 @@ async function initDb() {
       ');'
     ]));
 
+    // Questions table (used by General Knowledge / practice)
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS questions (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      "  question_english TEXT,",
+      "  question_hindi TEXT,",
+      "  options_1_english TEXT,",
+      "  options_2_english TEXT,",
+      "  options_3_english TEXT,",
+      "  options_4_english TEXT,",
+      "  options_1_hindi TEXT,",
+      "  options_2_hindi TEXT,",
+      "  options_3_hindi TEXT,",
+      "  options_4_hindi TEXT,",
+      "  answer TEXT,",
+      "  category TEXT,",
+      "  chapter_name TEXT,",
+      "  solution TEXT,",
+      "  slug TEXT UNIQUE,",
+      "  active INTEGER DEFAULT 1,",
+      "  flags_count INTEGER DEFAULT 0,",
+      "  feedback_count INTEGER DEFAULT 0,",
+      "  hits INTEGER DEFAULT 0,",
+      "  created_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
+
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS feedbacks (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  question_id INTEGER NOT NULL,',
+      '  content TEXT,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE",
+      ');'
+    ]));
+
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_question TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_answer TEXT'); } catch(e){}
     const [adminRows] = await dbQuery('SELECT id FROM admins LIMIT 1');
     if (!adminRows || adminRows.length === 0) {
-      console.log('No admin account found. Create one using the /ratans registration UI or insert directly into the database.');
+      logInfo('No admin account found. Create one using the /ratans registration UI or insert directly into the database.');
     }
   } else {
     if (pool) {
-      console.log('MySQL detected; skipping schema initialization (assumed already applied).');
-      return;
+      logInfo('MySQL detected; ensuring base schema is in place.');
     }
     await dbQuery(sql([
       'CREATE TABLE IF NOT EXISTS admins (',
@@ -556,6 +600,42 @@ async function initDb() {
       '  password VARCHAR(255),',
       '  secret_question TEXT,',
       '  secret_answer TEXT',
+      ') ENGINE=InnoDB;'
+    ]));
+
+    // Questions table for MySQL
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS questions (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  question_english TEXT,',
+      '  question_hindi TEXT,',
+      '  options_1_english TEXT,',
+      '  options_2_english TEXT,',
+      '  options_3_english TEXT,',
+      '  options_4_english TEXT,',
+      '  options_1_hindi TEXT,',
+      '  options_2_hindi TEXT,',
+      '  options_3_hindi TEXT,',
+      '  options_4_hindi TEXT,',
+      '  answer TEXT,',
+      '  category TEXT,',
+      '  chapter_name TEXT,',
+      '  solution TEXT,',
+      '  slug VARCHAR(255) UNIQUE,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  flags_count INT DEFAULT 0,',
+      '  feedback_count INT DEFAULT 0,',
+      '  hits INT DEFAULT 0,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
+
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS feedbacks (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  question_id INT NOT NULL,',
+      '  content TEXT,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
       ') ENGINE=InnoDB;'
     ]));
 
@@ -649,17 +729,17 @@ async function initDb() {
           const [[colInfo]] = await pool.query("SELECT COUNT(*) as c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'brand_requests' AND COLUMN_NAME = 'image'", [DB_DATABASE]);
           if (!colInfo || Number(colInfo.c || 0) === 0) {
             await pool.query("ALTER TABLE brand_requests ADD COLUMN image TEXT");
-            console.log('Added image column to brand_requests (MySQL)');
+            logInfo('Added image column to brand_requests (MySQL)');
           }
           // ensure title column exists
           const [[titleInfo]] = await pool.query("SELECT COUNT(*) as c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'brand_requests' AND COLUMN_NAME = 'title'", [DB_DATABASE]);
           if (!titleInfo || Number(titleInfo.c || 0) === 0) {
             await pool.query("ALTER TABLE brand_requests ADD COLUMN title VARCHAR(255)");
-            console.log('Added title column to brand_requests (MySQL)');
+            logInfo('Added title column to brand_requests (MySQL)');
           }
         } catch (innerErr) {
           // best-effort: try ALTER directly
-          try { await pool.query("ALTER TABLE brand_requests ADD COLUMN image TEXT"); console.log('Added image column to brand_requests (MySQL - direct)'); } catch(e2) { console.warn('Could not add image column to brand_requests (MySQL)', e2 && e2.message ? e2.message : String(e2)); }
+          try { await pool.query("ALTER TABLE brand_requests ADD COLUMN image TEXT"); logInfo('Added image column to brand_requests (MySQL - direct)'); } catch(e2) { console.warn('Could not add image column to brand_requests (MySQL)', e2 && e2.message ? e2.message : String(e2)); }
         }
       }
     } catch(e){}
@@ -673,14 +753,14 @@ async function initDb() {
           const hasTitle = Array.isArray(cols) && cols.some(c => String(c.name) === 'title');
           if (!hasImage) {
             sqlite.prepare("ALTER TABLE brand_requests ADD COLUMN image TEXT").run();
-            console.log('Added image column to brand_requests (SQLite)');
+            logInfo('Added image column to brand_requests (SQLite)');
           }
           if (!hasTitle) {
             sqlite.prepare("ALTER TABLE brand_requests ADD COLUMN title TEXT").run();
-            console.log('Added title column to brand_requests (SQLite)');
+            logInfo('Added title column to brand_requests (SQLite)');
           }
         } catch (ie) {
-          try { sqlite.prepare("ALTER TABLE brand_requests ADD COLUMN image TEXT").run(); console.log('Added image column to brand_requests (SQLite - direct)'); } catch(e2) { console.warn('Could not add image column to brand_requests (SQLite)', e2 && e2.message ? e2.message : String(e2)); }
+          try { sqlite.prepare("ALTER TABLE brand_requests ADD COLUMN image TEXT").run(); logInfo('Added image column to brand_requests (SQLite - direct)'); } catch(e2) { console.warn('Could not add image column to brand_requests (SQLite)', e2 && e2.message ? e2.message : String(e2)); }
         }
       }
     } catch(e){}
@@ -732,6 +812,7 @@ async function initDb() {
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN meta_title TEXT"); } } catch(e){}
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN meta_description TEXT"); } } catch(e){}
     try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN keywords TEXT"); } } catch(e){}
+    try { if (pool) { await pool.query("ALTER TABLE brand_strip ADD COLUMN views INT DEFAULT 0"); } } catch(e){}
 
     await dbQuery(sql([
       'CREATE TABLE IF NOT EXISTS categories (',
@@ -789,15 +870,15 @@ async function initDb() {
           const [[secretQ]] = await pool.query("SELECT COUNT(*) as c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'admins' AND COLUMN_NAME = 'secret_question'", [DB_DATABASE]);
           if (!secretQ || Number(secretQ.c || 0) === 0) {
             await pool.query("ALTER TABLE admins ADD COLUMN secret_question TEXT");
-            console.log('Added secret_question column to admins (MySQL)');
+            logInfo('Added secret_question column to admins (MySQL)');
           }
           const [[secretA]] = await pool.query("SELECT COUNT(*) as c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'admins' AND COLUMN_NAME = 'secret_answer'", [DB_DATABASE]);
           if (!secretA || Number(secretA.c || 0) === 0) {
             await pool.query("ALTER TABLE admins ADD COLUMN secret_answer TEXT");
-            console.log('Added secret_answer column to admins (MySQL)');
+            logInfo('Added secret_answer column to admins (MySQL)');
           }
         } catch (innerErr) {
-          try { await pool.query("ALTER TABLE admins ADD COLUMN secret_question TEXT"); await pool.query("ALTER TABLE admins ADD COLUMN secret_answer TEXT"); console.log('Added secret_question/secret_answer to admins (MySQL - direct)'); } catch(e2) { console.warn('Could not add secret columns to admins (MySQL)', e2 && e2.message ? e2.message : String(e2)); }
+          try { await pool.query("ALTER TABLE admins ADD COLUMN secret_question TEXT"); await pool.query("ALTER TABLE admins ADD COLUMN secret_answer TEXT"); logInfo('Added secret_question/secret_answer to admins (MySQL - direct)'); } catch(e2) { console.warn('Could not add secret columns to admins (MySQL)', e2 && e2.message ? e2.message : String(e2)); }
         }
       }
     } catch(e){}
@@ -812,7 +893,7 @@ async function initDb() {
     if (rows.length === 0) {
       const pw = await bcrypt.hash('admin123', 10);
       await dbQuery('INSERT INTO admins (email, password) VALUES (?, ?)', ['admin@studygk.local', pw]);
-      console.log('Seeded admin: admin@studygk.local / admin123');
+      logInfo('Seeded admin: admin@studygk.local / admin123');
     }
   }
 }
@@ -1196,17 +1277,112 @@ app.get('/api/search', asyncHandler(async (req, res) => {
   }catch(err){ console.error(err); res.status(500).json({ error: 'Search failed' }) }
 }));
 
-// sitemap.xml
+// sitemap.xml (extended)
 app.get('/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const [rows] = await dbQuery('SELECT id, slug, updated_at, created_at FROM blogs');
     const base = (req.protocol || 'http') + '://' + req.get('host')
-    const urls = (rows || []).map(r => {
-      const loc = base + '/posts/' + (r.slug || r.id)
-      const lastmod = r.updated_at || r.created_at || new Date().toISOString()
-      return `<url><loc>${loc}</loc><lastmod>${new Date(lastmod).toISOString()}</lastmod><changefreq>weekly</changefreq></url>`
-    }).join('\n')
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`
+    const urlEntries = [];
+
+    // Always include a few important static routes
+    const now = new Date().toISOString();
+    urlEntries.push({ loc: base + '/', lastmod: now, changefreq: 'daily' });
+    urlEntries.push({ loc: base + '/about', lastmod: now, changefreq: 'monthly' });
+    urlEntries.push({ loc: base + '/contact', lastmod: now, changefreq: 'monthly' });
+    urlEntries.push({ loc: base + '/terms', lastmod: now, changefreq: 'yearly' });
+    urlEntries.push({ loc: base + '/general-knowledge', lastmod: now, changefreq: 'daily' });
+
+    // Helper to push rows safely
+    const pushRows = (rows, pathPrefix, slugField = 'slug') => {
+      (rows || []).forEach(r => {
+        const ident = (r && (r[slugField] || r.id)) || '';
+        if (!ident) return;
+        const loc = base + pathPrefix + ident;
+        const lastmod = r.updated_at || r.updatedAt || r.created_at || r.createdAt || now;
+        urlEntries.push({ loc, lastmod: new Date(lastmod).toISOString(), changefreq: 'weekly' });
+      })
+    }
+
+    // pages
+    try{
+      const [pages] = await dbQuery('SELECT slug, updated_at, created_at FROM pages WHERE published = 1');
+      pushRows(pages, '/pages/');
+    }catch(e){}
+
+    // blogs / posts
+    try{
+      const [blogs] = await dbQuery('SELECT slug, updated_at, created_at FROM blogs WHERE published = 1');
+      pushRows(blogs, '/posts/');
+    }catch(e){}
+
+    // product brands
+    try{
+      const [brands] = await dbQuery('SELECT slug, id, updated_at, created_at FROM product_brands');
+      pushRows(brands, '/brands/');
+    }catch(e){}
+
+    // brand strip entries
+    try{
+      const [strips] = await dbQuery('SELECT slug, id, updated_at, created_at FROM brand_strip WHERE active = 1');
+      pushRows(strips, '/brand-strip/');
+    }catch(e){}
+
+    // questions (general knowledge)
+    try{
+      const [questions] = await dbQuery('SELECT slug, id, updated_at, created_at FROM questions');
+      pushRows(questions, '/general-knowledge/');
+    }catch(e){}
+
+    // build xml
+    // Also expose section sitemap files so crawlers can discover them easily
+    try{
+      urlEntries.push({ loc: base + '/general-knowledge/sitemap.xml', lastmod: now, changefreq: 'daily' })
+      urlEntries.push({ loc: base + '/currentaffairs/sitemap.xml', lastmod: now, changefreq: 'daily' })
+    }catch(e){}
+
+    const urlsXml = urlEntries.map(u => `<url><loc>${u.loc}</loc><lastmod>${u.lastmod}</lastmod><changefreq>${u.changefreq}</changefreq></url>`).join('\n')
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`
+    res.header('Content-Type','application/xml').send(xml)
+  }catch(err){ console.error(err); res.status(500).send('error') }
+}))
+
+// General Knowledge questions sitemap
+app.get('/general-knowledge/sitemap.xml', asyncHandler(async (req, res) => {
+  try{
+    const base = (req.protocol || 'http') + '://' + req.get('host')
+    const now = new Date().toISOString();
+    const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE (chapter_name IS NULL OR chapter_name NOT LIKE '%Current Affairs%')");
+    const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
+    const urlEntries = (rows || []).map(r => {
+      const ident = (r && (r.slug || r.id)) || '';
+      if (!ident) return null;
+      const loc = base + '/general-knowledge/' + encodeURIComponent(String(ident));
+      const lastmod = r.created_at || r.createdAt || now;
+      return { loc, lastmod: new Date(lastmod).toISOString(), changefreq: 'weekly' };
+    }).filter(Boolean);
+
+    const urlsXml = urlEntries.map(u => `<url><loc>${u.loc}</loc><lastmod>${u.lastmod}</lastmod><changefreq>${u.changefreq}</changefreq></url>`).join('\n')
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urlsXml}\n</urlset>`
+    res.header('Content-Type','application/xml').send(xml)
+  }catch(err){ console.error(err); res.status(500).send('error') }
+}))
+
+// Current Affairs questions sitemap
+app.get('/currentaffairs/sitemap.xml', asyncHandler(async (req, res) => {
+  try{
+    const base = (req.protocol || 'http') + '://' + req.get('host')
+    const now = new Date().toISOString();
+    const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE chapter_name LIKE '%Current Affairs%'");
+    const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
+    const urlEntries = (rows || []).map(r => {
+      const ident = (r && (r.slug || r.id)) || '';
+      if (!ident) return null;
+      const loc = base + '/currentaffairs/' + encodeURIComponent(String(ident));
+      const lastmod = r.created_at || r.createdAt || now;
+      return { loc, lastmod: new Date(lastmod).toISOString(), changefreq: 'weekly' };
+    }).filter(Boolean);
+
+    const urlsXml = urlEntries.map(u => `<url><loc>${u.loc}</loc><lastmod>${u.lastmod}</lastmod><changefreq>${u.changefreq}</changefreq></url>`).join('\n')
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urlsXml}\n</urlset>`
     res.header('Content-Type','application/xml').send(xml)
   }catch(err){ console.error(err); res.status(500).send('error') }
 }))
@@ -1665,13 +1841,294 @@ app.get('/api/brand-requests', authMiddleware, asyncHandler(async (req, res) => 
   res.json(rows);
 }));
 
+// Questions API (General Knowledge)
+app.get('/api/questions', asyncHandler(async (req, res) => {
+  try {
+    const q = (req.query.q || '').toString().trim();
+    const category = (req.query.category || '').toString().trim();
+    const chapter = (req.query.chapter || '').toString().trim();
+    const rawPage = Number.parseInt(String(req.query.page || ''), 10);
+    const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+    const rawLimit = Number.parseInt(String(req.query.limit || ''), 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 15;
+    const rawOffset = (typeof req.query.offset !== 'undefined') ? Number.parseInt(String(req.query.offset || ''), 10) : ((page - 1) * limit);
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : Math.max(0, (page - 1) * limit);
+    const random = (req.query.random === '1' || req.query.random === 'true');
+
+    const where = ['active = 1'];
+    const params = [];
+    if (q) {
+      const like = '%' + q + '%';
+      where.push('(question_english LIKE ? OR question_hindi LIKE ? OR chapter_name LIKE ? OR category LIKE ? OR options_1_english LIKE ? OR options_2_english LIKE ? OR options_3_english LIKE ? OR options_4_english LIKE ? OR options_1_hindi LIKE ? OR options_2_hindi LIKE ? OR options_3_hindi LIKE ? OR options_4_hindi LIKE ? OR solution LIKE ?)');
+      for (let i = 0; i < 13; i++) params.push(like);
+    }
+    if (category) { where.push('category = ?'); params.push(category); }
+    // support excluding one or more categories via `exclude_category` (comma-separated)
+    if (req.query.exclude_category) {
+      const raw = String(req.query.exclude_category || '').split(',').map(s => s.trim()).filter(Boolean)
+      if (raw.length) {
+        const placeholders = raw.map(() => '?').join(',')
+        where.push(`category NOT IN (${placeholders})`)
+        for (const v of raw) params.push(v)
+      }
+    }
+    // support chapter substring matching when `chapter_like` is provided
+    if (req.query.chapter_like) {
+      const likeVal = '%' + String(req.query.chapter_like || '').trim() + '%'
+      where.push('chapter_name LIKE ?')
+      params.push(likeVal)
+    } else if (chapter) { where.push('chapter_name = ?'); params.push(chapter); }
+    const whereSql = where.length ? ('WHERE ' + where.join(' AND ')) : '';
+    const orderSql = random ? (useSqlite ? 'ORDER BY RANDOM()' : 'ORDER BY RAND()') : 'ORDER BY created_at DESC';
+
+    const limitClause = useSqlite ? 'LIMIT ? OFFSET ?' : `LIMIT ${limit} OFFSET ${offset}`;
+    const limitParams = useSqlite ? [...params, limit, offset] : params;
+    const [items] = await dbQuery(`SELECT * FROM questions ${whereSql} ${orderSql} ${limitClause}`, limitParams);
+    const [countRow] = await dbQuery(`SELECT COUNT(*) as total FROM questions ${whereSql}`, params);
+    const total = Array.isArray(countRow) && countRow[0] ? Number(countRow[0].total || 0) : 0;
+    res.json({ items: items || [], total });
+  } catch (err) {
+    console.error('questions list error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load questions', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// List distinct categories and chapters
+app.get('/api/questions/meta', asyncHandler(async (req, res) => {
+  try {
+    const [catRows] = await dbQuery("SELECT DISTINCT category FROM questions WHERE active = 1 AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category ASC");
+    const [chapRows] = await dbQuery("SELECT DISTINCT chapter_name FROM questions WHERE active = 1 AND chapter_name IS NOT NULL AND TRIM(chapter_name) <> '' ORDER BY chapter_name ASC");
+    const categories = (catRows || []).map(r => r.category).filter(Boolean);
+    const chapters = (chapRows || []).map(r => r.chapter_name).filter(Boolean);
+    res.json({ categories, chapters });
+  } catch (err) {
+    console.error('questions meta error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load question metadata', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+app.get('/api/questions/:slug', asyncHandler(async (req, res) => {
+  try {
+    const slug = String(req.params.slug || '').trim();
+    if (!slug) return res.status(400).json({ error: 'missing slug' });
+    const [rows] = await dbQuery('SELECT * FROM questions WHERE slug = ? LIMIT 1', [slug]);
+    if (!rows || rows.length === 0) return res.status(404).json({ item: null });
+    res.json({ item: rows[0] });
+  } catch (err) {
+    console.error('question fetch error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load question', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Admin: create question
+app.post('/api/questions', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const data = req.body || {};
+    if (!data.question_english) return res.status(400).json({ error: 'question_english required' });
+    const makeSlug = s => (s||'').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const baseSlug = data.slug ? String(data.slug).trim() : makeSlug(data.question_english || '') || ('q-' + Date.now());
+    let finalSlug = baseSlug;
+    // ensure uniqueness (limited attempts)
+    for (let i = 0; i < 8; i++){
+      const [exists] = await dbQuery('SELECT id FROM questions WHERE slug = ? LIMIT 1', [finalSlug]);
+      if (!exists || exists.length === 0) break;
+      finalSlug = `${baseSlug}-${Date.now().toString(36).slice(-4)}-${i}`;
+    }
+    const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug'];
+    const vals = fields.map(f => (f === 'slug' ? finalSlug : (data[f] || null)));
+    const placeholders = fields.map(() => '?').join(',');
+    let newId;
+    if (useSqlite) {
+      const [info] = await dbQuery(`INSERT INTO questions (${fields.join(',')}) VALUES (${placeholders})`, vals);
+      newId = info.lastInsertRowid;
+    } else {
+      const [result] = await dbQuery(`INSERT INTO questions (${fields.join(',')}) VALUES (${placeholders})`, vals);
+      newId = result.insertId;
+    }
+    const [rows] = await dbQuery('SELECT * FROM questions WHERE id = ? LIMIT 1', [newId]);
+    res.json({ ok: true, item: rows && rows[0] ? rows[0] : null });
+  } catch (err) {
+    console.error('question create error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to create question', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Admin: patch/delete by id
+app.patch('/api/questions/:id', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
+    const data = req.body || {};
+    const sets = [];
+    const params = [];
+    Object.keys(data).forEach(k => { sets.push(`${k} = ?`); params.push(data[k]); });
+    if (sets.length === 0) return res.status(400).json({ error: 'no fields' });
+    params.push(id);
+    await dbQuery(`UPDATE questions SET ${sets.join(',')} WHERE id = ?`, params);
+    const [rows] = await dbQuery('SELECT * FROM questions WHERE id = ? LIMIT 1', [id]);
+    res.json({ ok: true, item: rows && rows[0] ? rows[0] : null });
+  } catch (err) {
+    console.error('question update error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to update question', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+app.delete('/api/questions/:id', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'invalid id' });
+    await dbQuery('DELETE FROM questions WHERE id = ?', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('question delete error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to delete question', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Flag a question (public)
+app.post('/api/questions/flag', asyncHandler(async (req, res) => {
+  try {
+    const id = Number(req.body && req.body.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'id required' });
+    await dbQuery('UPDATE questions SET flags_count = COALESCE(flags_count,0) + 1 WHERE id = ?', [id]);
+    const [rows] = await dbQuery('SELECT flags_count FROM questions WHERE id = ? LIMIT 1', [id]);
+    res.json({ ok: true, flags_count: (rows && rows[0] && Number(rows[0].flags_count||0)) });
+  } catch (err) {
+    console.error('question flag error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to flag question', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Feedback for a question (public)
+app.post('/api/questions/feedback', asyncHandler(async (req, res) => {
+  try {
+    const id = Number(req.body && req.body.id);
+    const content = (req.body && req.body.content) ? String(req.body.content).trim() : '';
+    if (!Number.isInteger(id) || id <= 0 || !content) return res.status(400).json({ error: 'id and content required' });
+    if (useSqlite) {
+      await dbQuery('INSERT INTO feedbacks (question_id, content) VALUES (?, ?)', [id, content]);
+    } else {
+      await dbQuery('INSERT INTO feedbacks (question_id, content) VALUES (?, ?)', [id, content]);
+    }
+    await dbQuery('UPDATE questions SET feedback_count = COALESCE(feedback_count,0) + 1 WHERE id = ?', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('question feedback error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to submit feedback', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// List distinct categories and chapters
+app.get('/api/questions/meta', asyncHandler(async (req, res) => {
+  try {
+    const [catRows] = await dbQuery("SELECT DISTINCT category FROM questions WHERE active = 1 AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category ASC");
+    const [chapRows] = await dbQuery("SELECT DISTINCT chapter_name FROM questions WHERE active = 1 AND chapter_name IS NOT NULL AND TRIM(chapter_name) <> '' ORDER BY chapter_name ASC");
+    const categories = (catRows || []).map(r => r.category).filter(Boolean);
+    const chapters = (chapRows || []).map(r => r.chapter_name).filter(Boolean);
+    res.json({ categories, chapters });
+  } catch (err) {
+    console.error('questions meta error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load question metadata', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Admin: bulk insert questions (accepts JSON array of question objects)
+app.post('/api/questions/bulk', authMiddleware, asyncHandler(async (req, res) => {
+  const items = Array.isArray(req.body) ? req.body : (Array.isArray(req.body.items) ? req.body.items : null);
+  if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items array required' });
+
+  // Ensure every item has a slug. Generate one when missing and make it unique
+  const makeSlug = s => (s||'').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  // prepare base slugs
+  const prepared = items.map(it => {
+    const raw = it && (it.slug || it.question_english || it.question_hindi) ? String(it.slug || it.question_english || it.question_hindi) : '';
+    const base = makeSlug(raw) || ('q-' + Date.now().toString(36).slice(-4));
+    return { __baseSlug: base, ...it };
+  });
+
+  // Check existing slugs in DB that conflict with our base slugs
+  const baseSlugs = Array.from(new Set(prepared.map(p => p.__baseSlug).filter(Boolean)));
+  const existingSlugsSet = new Set();
+  if (baseSlugs.length) {
+    try{
+      const placeholders = baseSlugs.map(()=>'?').join(',');
+      const [rows] = await dbQuery(`SELECT slug FROM questions WHERE slug IN (${placeholders})`, baseSlugs);
+      (rows || []).forEach(r => { if (r && r.slug) existingSlugsSet.add(String(r.slug)); });
+    }catch(e){ /* ignore DB check errors and fall back to naive uniqueness */ }
+  }
+
+  // assign final unique slugs (avoid collisions among the batch and with DB)
+  const used = new Set(existingSlugsSet);
+  prepared.forEach((p, idx) => {
+    let final = p.__baseSlug || ('q-' + Date.now().toString(36).slice(-4));
+    let counter = 0;
+    while (used.has(final)) {
+      counter += 1;
+      final = `${p.__baseSlug}-${Date.now().toString(36).slice(-4)}-${counter}`;
+    }
+    used.add(final);
+    p.slug = final;
+    delete p.__baseSlug;
+  });
+
+  // replace items with prepared (contain slug)
+  // Note: downstream insertion reads fields from objects by name
+  for (let i = 0; i < items.length; i++) items[i] = prepared[i];
+  const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug'];
+  const chunkSize = 200;
+  let inserted = 0;
+  try {
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const chunk = items.slice(i, i + chunkSize);
+      const values = chunk.map(it => fields.map(f => it[f] || null));
+      const placeholders = values.map(() => '(' + fields.map(() => '?').join(',') + ')').join(',');
+      const flat = values.flat();
+      if (useSqlite) {
+        // SQLite: use INSERT OR IGNORE
+        await dbQuery(`INSERT OR IGNORE INTO questions (${fields.join(',')}) VALUES ${placeholders}`, flat);
+        inserted += chunk.length;
+      } else {
+        // MySQL: use INSERT IGNORE to skip duplicates
+        const [result] = await dbQuery(`INSERT IGNORE INTO questions (${fields.join(',')}) VALUES ${placeholders}`, flat);
+        if (result && typeof result.affectedRows === 'number') inserted += result.affectedRows;
+      }
+    }
+    res.json({ ok: true, inserted });
+  } catch (e) {
+    console.error('bulk insert failed', e && (e.message || e));
+    res.status(500).json({ error: e && e.message ? e.message : 'bulk insert failed' });
+  }
+}));
+
+// Admin: list flagged questions (flags_count > 0)
+app.get('/api/questions/flagged', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const [rows] = await dbQuery('SELECT * FROM questions WHERE COALESCE(flags_count,0) > 0 ORDER BY flags_count DESC, created_at DESC');
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (err) {
+    console.error('flagged questions error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load flagged questions', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
+// Admin: list feedback entries joined with questions
+app.get('/api/questions/feedbacks', authMiddleware, asyncHandler(async (req, res) => {
+  try {
+    const [rows] = await dbQuery(`SELECT f.id, f.question_id, f.content, f.created_at, q.question_english, q.slug FROM feedbacks f LEFT JOIN questions q ON q.id = f.question_id ORDER BY f.created_at DESC`);
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (err) {
+    console.error('question feedback list error', err && err.message ? err.message : err);
+    res.status(500).json({ error: 'Failed to load question feedbacks', details: err && err.message ? err.message : String(err) });
+  }
+}));
+
 // Admin: update brand request (e.g., mark solved)
 app.put('/api/brand-requests/:id', authMiddleware, asyncHandler(async (req, res) => {
   const id = req.params.id;
   const { status } = req.body;
   // Use MySQL-compatible DATETIME/TIMESTAMP format (YYYY-MM-DD HH:MM:SS) to avoid incorrect datetime value errors
   const resolved_at = status === 'solved' ? (new Date().toISOString().slice(0,19).replace('T',' ')) : null;
-  console.log('[PUT] /api/brand-requests/', id, 'status=', status, 'resolved_at=', resolved_at);
+  logInfo('[PUT] /api/brand-requests/', id, 'status=', status, 'resolved_at=', resolved_at);
   try {
     await dbQuery('UPDATE brand_requests SET status = ?, resolved_at = ? WHERE id = ?', [status, resolved_at, id]);
     const [rows] = await dbQuery('SELECT * FROM brand_requests WHERE id = ? LIMIT 1', [id]);
@@ -1881,6 +2338,12 @@ app.get('/api/admin/overview', authMiddleware, asyncHandler(async (req, res) => 
   const stripTop = await safe(`SELECT id, title, slug, COALESCE(views,0) AS views FROM brand_strip ORDER BY COALESCE(views,0) DESC LIMIT 10`);
   const brandTop = await safe(`SELECT id, title, link, COALESCE(views,0) AS views FROM product_brands ORDER BY COALESCE(views,0) DESC LIMIT 10`);
 
+  // Question stats
+  const questionsCountRow = (await safe('SELECT COUNT(*) AS c FROM questions')) ? (await safe('SELECT COUNT(*) AS c FROM questions'))[0] : null;
+  const questionsViewsRow = (await safe('SELECT COALESCE(SUM(hits),0) AS c FROM questions')) ? (await safe('SELECT COALESCE(SUM(hits),0) AS c FROM questions'))[0] : null;
+  const questionsByCategory = await safe(`SELECT COALESCE(category, 'Uncategorized') AS category, COUNT(*) AS c, COALESCE(SUM(hits),0) AS views FROM questions GROUP BY COALESCE(category, 'Uncategorized') ORDER BY c DESC`);
+  const currentAffairsCountRow = await safe("SELECT COUNT(*) AS c FROM questions WHERE chapter_name LIKE '%Current Affairs%'");
+
   res.json({
     blogs_count: Number((blogsCountRow && blogsCountRow.c) || 0),
     total_blog_views: Number((totalViewsRow && totalViewsRow.c) || 0),
@@ -1888,9 +2351,37 @@ app.get('/api/admin/overview', authMiddleware, asyncHandler(async (req, res) => 
     strips_count: Number((stripsCountRow && stripsCountRow.c) || 0),
     brands_count: Number((brandsCountRow && brandsCountRow.c) || 0),
     brand_requests_pending: Number((pendingRequestsRow && pendingRequestsRow.c) || 0),
+    total_questions: Number((questionsCountRow && questionsCountRow.c) || 0),
+    total_question_views: Number((questionsViewsRow && questionsViewsRow.c) || 0),
+    current_affairs_questions_count: Number((currentAffairsCountRow && currentAffairsCountRow.c) || 0),
+    questions_by_category: Array.isArray(questionsByCategory) ? questionsByCategory : [],
     trending_blogs: Array.isArray(trendingRows) ? trendingRows : [],
     top_brand_strip: Array.isArray(stripTop) ? stripTop : [],
     top_product_brands: Array.isArray(brandTop) ? brandTop : []
+  });
+}));
+
+// Admin: summary of top brand strip, top product brands, and questions by category
+app.get('/api/admin/summary', authMiddleware, asyncHandler(async (req, res) => {
+  const safe = async (q, params) => {
+    try {
+      const result = await dbQuery(q, params || []);
+      if (Array.isArray(result) && result.length > 0) return result[0];
+      return result;
+    } catch (e) {
+      console.warn('summary subquery failed', q, e && e.message ? e.message : e);
+      return null;
+    }
+  };
+
+  const stripTop = await safe(`SELECT id, title, slug, COALESCE(views,0) AS views FROM brand_strip ORDER BY COALESCE(views,0) DESC LIMIT 10`);
+  const brandTop = await safe(`SELECT id, title, link, COALESCE(views,0) AS views FROM product_brands ORDER BY COALESCE(views,0) DESC LIMIT 10`);
+  const questionsByCategory = await safe(`SELECT COALESCE(category, 'Uncategorized') AS category, COUNT(*) AS qty, COALESCE(SUM(hits),0) AS views FROM questions GROUP BY COALESCE(category, 'Uncategorized') ORDER BY qty DESC`);
+
+  res.json({
+    top_brand_strip: Array.isArray(stripTop) ? stripTop : [],
+    top_product_brands: Array.isArray(brandTop) ? brandTop : [],
+    questions_by_category: Array.isArray(questionsByCategory) ? questionsByCategory : []
   });
 }));
 
@@ -2072,7 +2563,7 @@ app.use((err, req, res, next) => {
 
 initDb().then(() => {
   app.listen(PORT, () => {
-    console.log('Server running on port', PORT);
+    logInfo('Server running on port', PORT);
   });
 }).catch(err => {
   console.error('Failed to initialize DB', err);

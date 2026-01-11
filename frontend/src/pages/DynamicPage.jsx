@@ -1,39 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-
-function normalizeSlug(value) {
-  if (value === undefined || value === null) return ''
-  let slug = String(value).trim()
-  if (!slug) return ''
-  slug = slug.replace(/^[a-z]+:\/\//i, '')
-  slug = slug.replace(/^\/\//, '')
-  const firstSlash = slug.indexOf('/')
-  if (firstSlash >= 0) {
-    const hostCandidate = slug.slice(0, firstSlash)
-    if (/^[A-Za-z0-9.-]+(?::\d+)?$/.test(hostCandidate)) {
-      slug = slug.slice(firstSlash + 1)
-    }
-  }
-  const hashIndex = slug.indexOf('#')
-  if (hashIndex >= 0) slug = slug.slice(0, hashIndex)
-  const queryIndex = slug.indexOf('?')
-  if (queryIndex >= 0) slug = slug.slice(0, queryIndex)
-  slug = slug.replace(/\\+/g, '/')
-  slug = slug.replace(/^\.+/, '')
-  slug = slug.replace(/\s+/g, '-')
-  while (slug.includes('../')) slug = slug.replace('../', '/')
-  while (slug.includes('/./')) slug = slug.replace('/./', '/')
-  slug = slug.replace(/\/+/g, '/')
-  slug = slug.replace(/^\/+/, '')
-  slug = slug.replace(/\/+$/, '')
-  slug = slug.replace(/^\.+/, '')
-  slug = slug.replace(/\.+$/, '')
-  slug = slug.replace(/[^A-Za-z0-9\-._/]+/g, '')
-  slug = slug.replace(/\/+/g, '/')
-  slug = slug.replace(/^\/+/, '')
-  slug = slug.replace(/\/+$/, '')
-  return slug
-}
+import { normalizeSlugPath } from '../utils/slug'
 
 function stripHtml(html) {
   if (!html) return ''
@@ -46,7 +13,7 @@ function stripHtml(html) {
 }
 
 export default function DynamicPage({ slug }) {
-  const cleanSlug = normalizeSlug(slug)
+  const cleanSlug = normalizeSlugPath(slug)
   const [page, setPage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -71,12 +38,16 @@ export default function DynamicPage({ slug }) {
         setLoading(false)
         return
       }
-      try { console.log('[DynamicPage] fetching slug=', cleanSlug) } catch (e) {}
+      if (import.meta && import.meta.env && import.meta.env.DEV) {
+        try { console.log('[DynamicPage] fetching slug=', cleanSlug) } catch (e) {}
+      }
       setLoading(true)
       setError('')
       try {
         const res = await fetch(`/api/pages/slug/${encodeURIComponent(cleanSlug)}`, { signal })
-        try { console.log('[DynamicPage] fetch status=', res.status) } catch (e) {}
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          try { console.log('[DynamicPage] fetch status=', res.status) } catch (e) {}
+        }
         if (!active) return
         if (res.status === 404) {
           setPage(null)

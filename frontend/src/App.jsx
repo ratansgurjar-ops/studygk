@@ -9,6 +9,9 @@ const PolicyPage = lazy(() => import('./pages/PromotionPolicy'))
 const ContactPage = lazy(() => import('./pages/Contact'))
 const AboutPage = lazy(() => import('./pages/About'))
 const DynamicPage = lazy(() => import('./pages/DynamicPage'))
+const GeneralKnowledge = lazy(() => import('./pages/GeneralKnowledge'))
+const CurrentAffairs = lazy(() => import('./pages/CurrentAffairs'))
+const QuestionPage = lazy(() => import('./pages/QuestionPage'))
 import { HelmetProvider } from 'react-helmet-async'
 
 const normalizeRoutePath = (path) => {
@@ -96,10 +99,25 @@ export default function App(){
 
   const pathOnly = route || '/'
   const isAdmin = pathOnly === '/ratan'
-  const staticPaths = new Set(['/request', '/terms', '/policy', '/about', '/ratans'])
+  const staticPaths = new Set(['/request', '/terms', '/policy', '/about', '/ratans', '/general-knowledge', '/currentaffairs'])
   const isPostRoute = pathOnly.startsWith('/posts/')
   const rawDynamicSlug = !isAdmin && !staticPaths.has(pathOnly) && !isPostRoute && pathOnly !== '/' ? safeDecode(pathOnly.slice(1)) : ''
   const dynamicSlug = normalizeDynamicSlug(rawDynamicSlug) || rawDynamicSlug
+
+  const isQuestionRoute = pathOnly.startsWith('/general-knowledge/') && pathOnly !== '/general-knowledge'
+
+  if (isQuestionRoute) {
+    const slug = safeDecode(pathOnly.replace('/general-knowledge/', ''))
+    return (
+      <HelmetProvider>
+        <div className="dynamic-page-standalone">
+          <Suspense fallback={<div style={{ padding: 20 }}>Loading...</div>}>
+            <QuestionPage slug={slug} />
+          </Suspense>
+        </div>
+      </HelmetProvider>
+    )
+  }
 
   if (dynamicSlug) {
     return (
@@ -116,7 +134,7 @@ export default function App(){
   return (
     <HelmetProvider>
     <div className="site-root">
-      {!isAdmin && (
+      {!isAdmin && pathOnly !== '/general-knowledge' && pathOnly !== '/currentaffairs' && (
         <header className="site-header">
           <div className="header-top">
             <div className="header-inner">
@@ -134,6 +152,18 @@ export default function App(){
             </div>
           </div>
 
+          {/* Mid row: primary site links (separate from category nav) */}
+          <div className="header-mid">
+            <div className="header-inner">
+              <nav className="nav" style={{justifyContent:'center'}}>
+                <button className="nav-btn" onClick={()=>nav('/')}>Home</button>
+                <button className="nav-btn" onClick={()=>nav('/general-knowledge')}>General Knowledge</button>
+                <button className="nav-btn" onClick={()=>nav('/currentaffairs')}>Current Affairs</button>
+                <button className="nav-btn" onClick={()=>nav('/')}>Blog</button>
+              </nav>
+            </div>
+          </div>
+
           <div className="header-bottom">
             <div className="header-inner">
               {/* Mobile categories quick access (visible on small screens) */}
@@ -145,7 +175,6 @@ export default function App(){
                 </div>
               </div>
               <nav className="nav">
-                <button className="nav-btn" onClick={()=>nav('/')}>Home</button>
                 <div className="cat-nav" aria-label="Categories">
                   {categories.map(c => (
                     <button key={c} className={`cat-btn ${getSelectedCategory()===c ? 'active' : ''}`} onClick={()=>nav('/?category='+encodeURIComponent(c))}>{c}</button>
@@ -167,6 +196,8 @@ export default function App(){
             : pathOnly === '/about' ? <AboutPage />
             : pathOnly === '/ratans' ? <AdminRegister />
             : isPostRoute ? <Post slug={safeDecode(pathOnly.replace('/posts/',''))} />
+            : pathOnly === '/general-knowledge' ? <GeneralKnowledge />
+            : pathOnly === '/currentaffairs' ? <CurrentAffairs />
             : <Home search={search} setSearch={setSearch} />}
         </Suspense>
       </main>
@@ -174,16 +205,19 @@ export default function App(){
       {!isAdmin && (
         <footer className="site-footer">
         <div className="footer-inner">
-          <div className="footer-grid" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:20,flexWrap:'wrap'}}>
-            <div style={{display:'flex',flexDirection:'column',flex:'1 1 320px',minWidth:220,gap:6}}>
-              <div style={{fontWeight:700,fontSize:16}}>Free Brand Feature</div>
-              <div className="muted" style={{fontSize:13,lineHeight:1.35}}>Publish a branded post for free to boost your brand's visibility — submit your details and we'll review your request.</div>
-            </div>
+          {/* Hide brand feature block only on General Knowledge page */}
+          {pathOnly !== '/general-knowledge' && pathOnly !== '/currentaffairs' && (
+            <div className="footer-grid" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:20,flexWrap:'wrap'}}>
+              <div style={{display:'flex',flexDirection:'column',flex:'1 1 320px',minWidth:220,gap:6}}>
+                <div style={{fontWeight:700,fontSize:16}}>Free Brand Feature</div>
+                <div className="muted" style={{fontSize:13,lineHeight:1.35}}>Publish a branded post for free to boost your brand's visibility — submit your details and we'll review your request.</div>
+              </div>
 
-            <div style={{display:'flex',flex:'0 0 220px',justifyContent:'flex-end',alignItems:'center'}}>
-              <button className="footer-cta-btn" onClick={()=>nav('/request')} style={{padding:'10px 14px',fontSize:14}}>Get Free Feature</button>
+              <div style={{display:'flex',flex:'0 0 220px',justifyContent:'flex-end',alignItems:'center'}}>
+                <button className="footer-cta-btn" onClick={()=>nav('/request')} style={{padding:'10px 14px',fontSize:14}}>Get Free Feature</button>
+              </div>
             </div>
-          </div>
+          )}
 
             <div style={{textAlign:'center', padding:12, fontSize:15}}>
             <span style={{cursor:'pointer', margin:'0 8px'}} onClick={()=>nav('/about')}>About!</span>
