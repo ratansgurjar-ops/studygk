@@ -9,35 +9,20 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
+        // ✅ ONLY API should be proxied by Vite
         '/api': {
           target,
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/api/, '/api')
         },
+
+        // ✅ uploads (images/files)
         '/uploads': {
           target,
           changeOrigin: true,
           secure: false
         }
-          ,
-          '/sitemap.xml': {
-            target,
-            changeOrigin: true,
-            secure: false
-            },
-          '/general-knowledge/sitemap.xml': {
-            target,
-            changeOrigin: true,
-            secure: false,
-            rewrite: (path) => path.replace(/^\/general-knowledge\/sitemap.xml/, '/general-knowledge/sitemap.xml')
-          },
-          '/currentaffairs/sitemap.xml': {
-            target,
-            changeOrigin: true,
-            secure: false,
-            rewrite: (path) => path.replace(/^\/currentaffairs\/sitemap.xml/, '/currentaffairs/sitemap.xml')
-          }
       }
     }
   }

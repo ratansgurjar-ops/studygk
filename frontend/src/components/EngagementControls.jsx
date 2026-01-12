@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-export default function EngagementControls({ id, slug, title, upVotes = 0, downVotes = 0, commentsCount = 0, onComment }) {
+export default function EngagementControls({ id, slug, title, description = '', image = '', upVotes = 0, downVotes = 0, commentsCount = 0, onComment }) {
   const identity = slug || id
   const voteKey = `blog_vote_${identity}`
   const shareKey = `shares_${identity}`
@@ -83,10 +83,39 @@ export default function EngagementControls({ id, slug, title, upVotes = 0, downV
   const handleShare = async () => {
     if (typeof window === 'undefined') return
     const url = window.location.origin + '/posts/' + (slug || id)
+    // create a compact two-line description for sharing
+    const raw = (description || '').toString().replace(/\s+/g, ' ').trim().slice(0,200)
+    const maxLine = 80
+    const firstLine = raw.slice(0, maxLine).trim()
+    let rest = raw.slice(maxLine).trim()
+    if (rest.length > maxLine) rest = rest.slice(0, maxLine - 3).trim() + '...'
+    const twoLineDesc = rest ? `${firstLine}\n${rest}` : firstLine
+    const textParts = []
+    if (title) textParts.push(title)
+    if (twoLineDesc) textParts.push(twoLineDesc)
+    textParts.push('Read more: ' + url)
+    if (image) textParts.push('Image: ' + image)
+    const shareText = textParts.join('\n\n')
+    // Try to copy rich share text to clipboard first so users can paste full text
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(shareText)
+        try { /* non-blocking feedback */ /* eslint-disable no-empty */ } catch (e) {}
+      }
+    } catch (e) {}
+
+    // Then attempt native share; on desktop fallback, open the URL in a new tab
     if (navigator.share) {
-      try { await navigator.share({ title, url }) } catch (e) {}
+      try { await navigator.share({ title, text: shareText, url }) } catch (e) {
+        // if native share fails, open in a new tab
+        try { window.open(url, '_blank', 'noopener,noreferrer') } catch (err) {}
+      }
     } else {
-      try { await navigator.clipboard.writeText(url); alert('Link copied to clipboard') } catch (e) { alert('Share not supported on this device') }
+      try {
+        // open in a new tab in the current browser so it doesn't switch to Edge
+        window.open(url, '_blank', 'noopener,noreferrer')
+      } catch (e) {}
+      try { alert('Share text copied to clipboard. The post has been opened in a new tab.') } catch (e) {}
     }
     try {
       if (typeof window === 'undefined') return

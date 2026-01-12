@@ -88,7 +88,7 @@ export default function Home({ search, setSearch }){
   useEffect(()=>{
     fetch('/api/brand-strip')
       .then(r=>r.json())
-      .then(data => setBrandStrip(Array.isArray(data) ? data.slice(0,5) : []))
+      .then(data => setBrandStrip(Array.isArray(data) ? data : []))
       .catch(()=>setBrandStrip([]))
   },[])
 
@@ -284,12 +284,12 @@ export default function Home({ search, setSearch }){
                 </div>
                 <div className="hero-right">
                   <div className="top-headlines">
-                    {(heroBlogs.slice(0,5)).map((b,i)=> (
+                    {heroBlogs.map((b,i)=> (
                       <button key={b.id} className={`top-headline ${i===heroIndex ? 'top-headline--active' : ''}`} onClick={(e)=>{ setHeroIndex(i); }}>
                         {b.featured_image ? <img src={b.featured_image} alt={b.title||'Post image'} className="th-img" loading="lazy" decoding="async"/> : <div className="th-img th-img--placeholder"/>}
                         <div style={{flex:1,textAlign:'left'}}>
                           <div className="th-title">{b.title}</div>
-                          <div className="th-meta">{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}</div>
+                          <div className="th-meta">{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}{typeof b.comments_count !== 'undefined' ? ` · ${Number(b.comments_count||0)} comments` : ''}</div>
                           <div className="th-desc">{excerptFromPost(b, 84)}</div>
                         </div>
                       </button>
@@ -352,11 +352,11 @@ export default function Home({ search, setSearch }){
             <a href="/" onClick={(e)=>{e.preventDefault(); window.history.pushState({},'', '/'); window.dispatchEvent(new PopStateEvent('popstate'))}} className="view-all">View all →</a>
           </div>
           <div className="recent-grid">
-            {nonHeroBlogs.slice(0,4).map(b=> (
+            {nonHeroBlogs.map(b=> (
               <article key={b.id} className="recent-card">
                 {b.featured_image ? <img src={b.featured_image} alt={b.title} className="recent-card-img" loading="lazy" decoding="async" /> : <div className="recent-card-img recent-card-img--placeholder" />}
                 <div className="recent-card-body">
-                  <div className="muted" style={{fontSize:12}}>{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}</div>
+                  <div className="muted" style={{fontSize:12}}>{new Date(b.created_at).toLocaleDateString()} · {displayAuthor(b.author) || 'Unknown'}{typeof b.comments_count !== 'undefined' ? ` · ${Number(b.comments_count||0)} comments` : ''}</div>
                   <h4 style={{margin:'6px 0'}} className="recent-card-title"><a href={'/posts/'+(b.slug || b.id)} onClick={(e)=>{ e.preventDefault(); try{ window.history.pushState({},'', '/posts/'+(b.slug || b.id)); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/posts/'+(b.slug || b.id) } }}>{b.title}</a></h4>
                   <p className="muted" style={{fontSize:13}}>{stripHtml(b.summary || b.content_preview || b.content || '').slice(0,120)}{stripHtml(b.summary || b.content_preview || b.content || '').length>120?'…':''}</p>
                 </div>
@@ -436,6 +436,8 @@ export default function Home({ search, setSearch }){
                           id={b.id}
                           slug={b.slug}
                           title={b.title}
+                          description={stripHtml(b.summary || b.content_preview || b.content || '')}
+                          image={b.featured_image || ''}
                           upVotes={b.up_votes}
                           downVotes={b.down_votes}
                           commentsCount={b.comments_count}

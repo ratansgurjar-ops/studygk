@@ -25,6 +25,11 @@ export default function GeneralKnowledge(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // When category changes, refresh the chapters list filtered by the category
+  useEffect(()=>{
+    fetchMeta(category || '')
+  }, [category])
+
   useEffect(()=>{
     fetchQuestions({ page: 1, append: false })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -32,9 +37,10 @@ export default function GeneralKnowledge(){
 
   const hasFilters = useMemo(()=> Boolean(category || chapter || search), [category, chapter, search])
 
-  async function fetchMeta(){
+  async function fetchMeta(cat = ''){
     try{
-      const res = await fetch('/api/questions/meta')
+      const url = '/api/questions/meta' + (cat ? ('?category=' + encodeURIComponent(cat)) : '')
+      const res = await fetch(url)
       if (!res.ok) return
       const d = await res.json()
       setCategories(Array.isArray(d.categories)?d.categories:[])

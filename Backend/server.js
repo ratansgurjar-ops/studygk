@@ -1280,7 +1280,7 @@ app.get('/api/search', asyncHandler(async (req, res) => {
 // sitemap.xml (extended)
 app.get('/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = (req.protocol || 'http') + '://' + req.get('host')
+    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
     const urlEntries = [];
 
     // Always include a few important static routes
@@ -1348,7 +1348,7 @@ app.get('/sitemap.xml', asyncHandler(async (req, res) => {
 // General Knowledge questions sitemap
 app.get('/general-knowledge/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = (req.protocol || 'http') + '://' + req.get('host')
+    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
     const now = new Date().toISOString();
     const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE (chapter_name IS NULL OR chapter_name NOT LIKE '%Current Affairs%')");
     const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
@@ -1369,7 +1369,7 @@ app.get('/general-knowledge/sitemap.xml', asyncHandler(async (req, res) => {
 // Current Affairs questions sitemap
 app.get('/currentaffairs/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = (req.protocol || 'http') + '://' + req.get('host')
+    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
     const now = new Date().toISOString();
     const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE chapter_name LIKE '%Current Affairs%'");
     const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
@@ -1893,13 +1893,22 @@ app.get('/api/questions', asyncHandler(async (req, res) => {
   }
 }));
 
-// List distinct categories and chapters
+// List distinct categories and chapters. If ?category= is provided, restrict chapters to that category.
 app.get('/api/questions/meta', asyncHandler(async (req, res) => {
   try {
     const [catRows] = await dbQuery("SELECT DISTINCT category FROM questions WHERE active = 1 AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category ASC");
-    const [chapRows] = await dbQuery("SELECT DISTINCT chapter_name FROM questions WHERE active = 1 AND chapter_name IS NOT NULL AND TRIM(chapter_name) <> '' ORDER BY chapter_name ASC");
     const categories = (catRows || []).map(r => r.category).filter(Boolean);
-    const chapters = (chapRows || []).map(r => r.chapter_name).filter(Boolean);
+
+    const categoryFilter = (req.query && String(req.query.category || '').trim()) || '';
+    let chapters = [];
+    if (categoryFilter) {
+      const [chapRows] = await dbQuery("SELECT DISTINCT chapter_name FROM questions WHERE active = 1 AND chapter_name IS NOT NULL AND TRIM(chapter_name) <> '' AND category = ? ORDER BY chapter_name ASC", [categoryFilter]);
+      chapters = (chapRows || []).map(r => r.chapter_name).filter(Boolean);
+    } else {
+      const [chapRows] = await dbQuery("SELECT DISTINCT chapter_name FROM questions WHERE active = 1 AND chapter_name IS NOT NULL AND TRIM(chapter_name) <> '' ORDER BY chapter_name ASC");
+      chapters = (chapRows || []).map(r => r.chapter_name).filter(Boolean);
+    }
+
     res.json({ categories, chapters });
   } catch (err) {
     console.error('questions meta error', err && err.message ? err.message : err);
@@ -2318,29 +2327,32 @@ app.get('/api/admin/overview', authMiddleware, asyncHandler(async (req, res) => 
   const safe = async (q, params) => {
     try {
       const result = await dbQuery(q, params || []);
-      // dbQuery returns [rows, fields] for SQL DBs, or [rows, undefined] for sqlite
-      if (Array.isArray(result) && result.length > 0) return result[0];
-      return result;
+      // dbQuery typically returns [rows, fields] for SQL DBs, or [rows, undefined] for sqlite
+      // Normalize: extract rows (result[0]) when present
+      let rows = Array.isArray(result) && result.length > 0 ? result[0] : result;
+      // If rows is an array with a single object (e.g., COUNT(*) result), return that object
+      if (Array.isArray(rows) && rows.length === 1) return rows[0];
+      return rows;
     } catch (e) {
       console.warn('overview subquery failed', q, e && e.message ? e.message : e);
       return null;
     }
   };
 
-  const blogsCountRow = (await safe('SELECT COUNT(*) AS c FROM blogs')) ? (await safe('SELECT COUNT(*) AS c FROM blogs'))[0] : null;
-  const totalViewsRow = (await safe('SELECT COALESCE(SUM(views),0) AS c FROM blogs')) ? (await safe('SELECT COALESCE(SUM(views),0) AS c FROM blogs'))[0] : null;
-  const commentsCountRow = (await safe("SELECT COUNT(*) AS c FROM comments")) ? (await safe("SELECT COUNT(*) AS c FROM comments"))[0] : null;
-  const stripsCountRow = (await safe('SELECT COUNT(*) AS c FROM brand_strip')) ? (await safe('SELECT COUNT(*) AS c FROM brand_strip'))[0] : null;
-  const brandsCountRow = (await safe('SELECT COUNT(*) AS c FROM product_brands')) ? (await safe('SELECT COUNT(*) AS c FROM product_brands'))[0] : null;
-  const pendingRequestsRow = (await safe("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'")) ? (await safe("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'"))[0] : null;
+  const blogsCountRow = await safe('SELECT COUNT(*) AS c FROM blogs');
+  const totalViewsRow = await safe('SELECT COALESCE(SUM(views),0) AS c FROM blogs');
+  const commentsCountRow = await safe("SELECT COUNT(*) AS c FROM comments");
+  const stripsCountRow = await safe('SELECT COUNT(*) AS c FROM brand_strip');
+  const brandsCountRow = await safe('SELECT COUNT(*) AS c FROM product_brands');
+  const pendingRequestsRow = await safe("SELECT COUNT(*) AS c FROM brand_requests WHERE status = 'open'");
 
   const trendingRows = await safe(`SELECT b.id, b.title, b.slug, COALESCE(b.views,0) AS views, (SELECT COUNT(*) FROM comments WHERE blog_id = b.id AND status = 'approved') AS comments_count FROM blogs b ORDER BY COALESCE(b.views,0) DESC LIMIT 5`);
   const stripTop = await safe(`SELECT id, title, slug, COALESCE(views,0) AS views FROM brand_strip ORDER BY COALESCE(views,0) DESC LIMIT 10`);
   const brandTop = await safe(`SELECT id, title, link, COALESCE(views,0) AS views FROM product_brands ORDER BY COALESCE(views,0) DESC LIMIT 10`);
 
   // Question stats
-  const questionsCountRow = (await safe('SELECT COUNT(*) AS c FROM questions')) ? (await safe('SELECT COUNT(*) AS c FROM questions'))[0] : null;
-  const questionsViewsRow = (await safe('SELECT COALESCE(SUM(hits),0) AS c FROM questions')) ? (await safe('SELECT COALESCE(SUM(hits),0) AS c FROM questions'))[0] : null;
+  const questionsCountRow = await safe('SELECT COUNT(*) AS c FROM questions');
+  const questionsViewsRow = await safe('SELECT COALESCE(SUM(hits),0) AS c FROM questions');
   const questionsByCategory = await safe(`SELECT COALESCE(category, 'Uncategorized') AS category, COUNT(*) AS c, COALESCE(SUM(hits),0) AS views FROM questions GROUP BY COALESCE(category, 'Uncategorized') ORDER BY c DESC`);
   const currentAffairsCountRow = await safe("SELECT COUNT(*) AS c FROM questions WHERE chapter_name LIKE '%Current Affairs%'");
 
@@ -2550,6 +2562,62 @@ app.get('/posts/:slug', asyncHandler(async (req, res) => {
 
   res.header('Content-Type','text/html').send(html);
 }));
+
+// Serve simple HTML with meta tags for General Knowledge question pages
+app.get('/general-knowledge/:slug', asyncHandler(async (req, res) => {
+  const slug = req.params.slug
+  const param = slug
+  const [rows] = await dbQuery('SELECT * FROM questions WHERE slug = ? OR id = ? LIMIT 1', [param, param])
+  const row = rows && rows.length ? rows[0] : null
+  if (!row) {
+    const indexPath = path.join(__dirname, '..', 'frontend', 'index.html')
+    if (fs.existsSync(indexPath)) return res.sendFile(indexPath)
+    return res.status(404).send('Not found')
+  }
+
+  const strip = (s) => (s || '').replace(/<[^>]*>/g,'').slice(0,160)
+  const title = (row.question_english || row.question_hindi || 'General Knowledge').toString().slice(0,200)
+  const desc = row.solution ? strip(row.solution) : strip(row.question_english || row.question_hindi || '')
+  const host = (req.protocol || 'http') + '://' + req.get('host')
+  const url = host + '/general-knowledge/' + (row.slug || row.id)
+  const image = ''
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(desc)}"/><link rel="canonical" href="${escapeHtml(url)}"/>` +
+    `<meta property="og:type" content="article"/><meta property="og:title" content="${escapeHtml(title)}"/><meta property="og:description" content="${escapeHtml(desc)}"/><meta property="og:url" content="${escapeHtml(url)}"/>` +
+    (image ? `<meta property="og:image" content="${escapeHtml(image)}"/>` : '') +
+    `<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="${escapeHtml(title)}"/><meta name="twitter:description" content="${escapeHtml(desc)}"/>` +
+    `</head><body><div id="root"></div><script>window.__SSR_QUESTION = ${JSON.stringify(row)};</script><script type="module" src="/src/main.jsx"></script></body></html>`
+
+  res.header('Content-Type','text/html').send(html)
+}))
+
+// Serve simple HTML with meta tags for Current Affairs question pages
+app.get('/currentaffairs/:slug', asyncHandler(async (req, res) => {
+  const slug = req.params.slug
+  const param = slug
+  const [rows] = await dbQuery('SELECT * FROM questions WHERE slug = ? OR id = ? LIMIT 1', [param, param])
+  const row = rows && rows.length ? rows[0] : null
+  if (!row) {
+    const indexPath = path.join(__dirname, '..', 'frontend', 'index.html')
+    if (fs.existsSync(indexPath)) return res.sendFile(indexPath)
+    return res.status(404).send('Not found')
+  }
+
+  const strip = (s) => (s || '').replace(/<[^>]*>/g,'').slice(0,160)
+  const title = (row.question_english || row.question_hindi || 'Current Affairs').toString().slice(0,200)
+  const desc = row.solution ? strip(row.solution) : strip(row.question_english || row.question_hindi || '')
+  const host = (req.protocol || 'http') + '://' + req.get('host')
+  const url = host + '/currentaffairs/' + (row.slug || row.id)
+  const image = ''
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(desc)}"/><link rel="canonical" href="${escapeHtml(url)}"/>` +
+    `<meta property="og:type" content="article"/><meta property="og:title" content="${escapeHtml(title)}"/><meta property="og:description" content="${escapeHtml(desc)}"/><meta property="og:url" content="${escapeHtml(url)}"/>` +
+    (image ? `<meta property="og:image" content="${escapeHtml(image)}"/>` : '') +
+    `<meta name="twitter:card" content="summary"/><meta name="twitter:title" content="${escapeHtml(title)}"/><meta name="twitter:description" content="${escapeHtml(desc)}"/>` +
+    `</head><body><div id="root"></div><script>window.__SSR_QUESTION = ${JSON.stringify(row)};</script><script type="module" src="/src/main.jsx"></script></body></html>`
+
+  res.header('Content-Type','text/html').send(html)
+}))
 
 // Consistent JSON error responses (and prevents crashes from unhandled async errors)
 app.use((err, req, res, next) => {

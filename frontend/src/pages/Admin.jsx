@@ -261,6 +261,8 @@ export default function Admin(){
   const [pages, setPages] = useState([])
   const [pageForm, setPageForm] = useState(()=>makeEmptyPageForm())
   const [editingPageId, setEditingPageId] = useState(null)
+  const [seoPages, setSeoPages] = useState({})
+  const [seoLoading, setSeoLoading] = useState(false)
   const [pageSearch, setPageSearch] = useState('')
   const [pageLoading, setPageLoading] = useState(false)
   const [pageNotice, setPageNotice] = useState('')
@@ -749,6 +751,7 @@ export default function Admin(){
               <button className={`side-btn ${activePanel==='comments'?'active':''}`} onClick={()=>{ setActivePanel('comments'); fetchAdminComments({ status: commentStatusFilter, blog_id: commentBlogFilter }); }}>Comments</button>
               <button className={`side-btn ${activePanel==='questions'?'active':''}`} onClick={()=>{ setActivePanel('questions'); }}>GK Questions</button>
               <button className={`side-btn ${activePanel==='current-affairs'?'active':''}`} onClick={()=>{ setActivePanel('current-affairs'); }}>Current Affairs</button>
+              <button className={`side-btn ${activePanel==='page-seo'?'active':''}`} onClick={()=>{ setActivePanel('page-seo'); }}>Page SEO (GK/CA)</button>
               <button className={`side-btn ${activePanel==='settings'?'active':''}`} onClick={()=>setActivePanel('settings')}>Settings</button>
               <div style={{marginTop:12}}><button onClick={logout}>Logout</button></div>
             </div>
@@ -802,6 +805,75 @@ export default function Admin(){
                   }}>Export CSV</button>
                 </div>
                 <AdminGK token={token} initialCategoryFilter={'Current Affairs'} />
+              </div>
+            )}
+            {activePanel === 'page-seo' && (
+              <div>
+                <h2>Page SEO — General Knowledge & Current Affairs</h2>
+                <p className="muted">Edit SEO meta for the public pages. Changes affect Open Graph and description used by link preview crawlers.</p>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}>
+                  {['general-knowledge','currentaffairs'].map((slug)=>{
+                    const key = slug
+                    const data = seoPages[key] || { meta_title:'', meta_description:'', keywords:'', id: null }
+                    return (
+                      <div key={key} style={{padding:12,background:'#fff',borderRadius:8}}>
+                        <h3 style={{marginTop:0}}>{slug === 'general-knowledge' ? 'General Knowledge' : 'Current Affairs'}</h3>
+                        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                          <label>Meta Title</label>
+                          <input value={data.meta_title || ''} onChange={(e)=> setSeoPages(prev => ({ ...prev, [key]: { ...(prev[key]||{}), meta_title: e.target.value } }))} />
+                          <label>Meta Description</label>
+                          <textarea rows={3} value={data.meta_description || ''} onChange={(e)=> setSeoPages(prev => ({ ...prev, [key]: { ...(prev[key]||{}), meta_description: e.target.value } }))} />
+                          <label>Keywords (comma separated)</label>
+                          <input value={data.keywords || ''} onChange={(e)=> setSeoPages(prev => ({ ...prev, [key]: { ...(prev[key]||{}), keywords: e.target.value } }))} />
+                          <div style={{display:'flex',gap:8,marginTop:8}}>
+                            <button type="button" onClick={async ()=>{
+                              try{
+                                setSeoLoading(true)
+                                const res = await fetch('/api/pages/slug/' + encodeURIComponent(slug))
+                                if (!res.ok) {
+                                  // initialize empty
+                                  setSeoPages(prev => ({ ...prev, [key]: { meta_title:'', meta_description:'', keywords:'', id: null } }))
+                                  return
+                                }
+                                const d = await res.json()
+                                setSeoPages(prev => ({ ...prev, [key]: { meta_title: d.meta_title || '', meta_description: d.meta_description || '', keywords: d.keywords || '', id: d.id || null } }))
+                              }catch(err){ console.error('load seo failed', err); alert('Failed to load') } finally { setSeoLoading(false) }
+                            }}>Load</button>
+                            <button type="button" onClick={async ()=>{
+                              try{
+                                setSeoLoading(true)
+                                const tokenVal = localStorage.getItem('token') || token || ''
+                                if (!tokenVal) return alert('Not authorized')
+                                const payload = {
+                                  title: (slug === 'general-knowledge' ? 'General Knowledge' : 'Current Affairs'),
+                                  slug: slug,
+                                  content: '',
+                                  meta_title: (seoPages[key] && seoPages[key].meta_title) || '',
+                                  meta_description: (seoPages[key] && seoPages[key].meta_description) || '',
+                                  keywords: (seoPages[key] && seoPages[key].keywords) || '',
+                                  published: true
+                                }
+                                if (seoPages[key] && seoPages[key].id) {
+                                  const res = await fetch('/api/pages/' + seoPages[key].id, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + tokenVal, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                                  if (!res.ok) { const d = await res.json().catch(()=>null); return alert(d && d.error ? d.error : 'Save failed') }
+                                  const d = await res.json()
+                                  setSeoPages(prev => ({ ...prev, [key]: { meta_title: d.meta_title || '', meta_description: d.meta_description || '', keywords: d.keywords || '', id: d.id || null } }))
+                                  alert('Updated')
+                                } else {
+                                  const res = await fetch('/api/pages', { method: 'POST', headers: { 'Authorization': 'Bearer ' + tokenVal, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                                  if (!res.ok) { const d = await res.json().catch(()=>null); return alert(d && d.error ? d.error : 'Create failed') }
+                                  const d = await res.json()
+                                  setSeoPages(prev => ({ ...prev, [key]: { meta_title: d.meta_title || '', meta_description: d.meta_description || '', keywords: d.keywords || '', id: d.id || null } }))
+                                  alert('Created')
+                                }
+                              }catch(err){ console.error('save seo failed', err); alert('Failed to save') } finally { setSeoLoading(false) }
+                            }}>{seoPages[key] && seoPages[key].id ? 'Update' : 'Create'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
             {activePanel === 'blogs' && (

@@ -759,6 +759,8 @@ export default function Post({ slug }){
 						id={post.id}
 						slug={post.slug}
 						title={post.title}
+						description={desc}
+						image={imageUrl || ''}
 						upVotes={post.up_votes}
 						downVotes={post.down_votes}
 						commentsCount={commentCount}
