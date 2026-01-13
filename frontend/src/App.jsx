@@ -64,7 +64,17 @@ const safeDecode = (value = '') => {
 export default function App(){
   const [route, setRoute] = useState(()=>normalizeRoutePath(window.location.pathname))
   const [categories, setCategories] = useState([])
+  const [mobileCatsOpen, setMobileCatsOpen] = useState(false)
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4799680224544946';
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    document.head.appendChild(script);
+  }, []);
+
   useEffect(()=>{
     const onPop = ()=> setRoute(normalizeRoutePath(window.location.pathname))
     window.addEventListener('popstate', onPop)
@@ -166,13 +176,28 @@ export default function App(){
 
           <div className="header-bottom">
             <div className="header-inner">
-              {/* Mobile categories quick access (visible on small screens) */}
+              {/* Mobile categories: toggle to open a vertical list on small screens */}
               <div className="mobile-only-cat">
-                <div className="cat-nav">
-                  {categories.map(c => (
-                    <button key={c} className={`cat-btn ${getSelectedCategory()===c ? 'active' : ''}`} onClick={()=>nav('/?category='+encodeURIComponent(c))}>{c}</button>
-                  ))}
-                </div>
+                <button
+                  className="mobile-cat-toggle"
+                  aria-expanded={mobileCatsOpen}
+                  onClick={() => setMobileCatsOpen(s => !s)}
+                >
+                  Categories
+                </button>
+                {mobileCatsOpen && (
+                  <div className="mobile-cat-list">
+                    <div className="cat-nav">
+                      {categories.map(c => (
+                        <button
+                          key={c}
+                          className={`cat-btn ${getSelectedCategory()===c ? 'active' : ''}`}
+                          onClick={() => { setMobileCatsOpen(false); nav('/?category='+encodeURIComponent(c)) }}
+                        >{c}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <nav className="nav">
                 <div className="cat-nav" aria-label="Categories">

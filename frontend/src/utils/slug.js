@@ -16,8 +16,8 @@ export function normalizeSlugPath(value) {
     if (/^[A-Za-z0-9.-]+(?::\d+)?$/.test(hostCandidate)) {
       slug = slug.slice(firstSlash + 1)
     }
-  } else if (/^[A-Za-z0-9.-]+(?::\d+)?$/.test(slug)) {
-    // Host only (no path)
+  } else if (/^[A-Za-z0-9.-]+(?::\d+)?$/.test(slug) && (slug.indexOf('.') !== -1 || slug.indexOf(':') !== -1)) {
+    // Host only (no path) — treat as host only only when it looks like a domain (contains a dot or port)
     slug = ''
   }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
+
 import { normalizeSlugPath } from '../utils/slug'
 
 function stripHtml(html) {
@@ -14,6 +15,7 @@ function stripHtml(html) {
 
 export default function DynamicPage({ slug }) {
   const cleanSlug = normalizeSlugPath(slug)
+  const [pageIndex, setPageIndex] = useState(0)
   const [page, setPage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -26,6 +28,17 @@ export default function DynamicPage({ slug }) {
     }
   }, [])
 
+  function extractBodyHtml(raw) {
+    if (!raw) return ''
+    const m = raw.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    if (m && m[1]) return m[1]
+    return String(raw)
+      .replace(/<!doctype[^>]*>/i, '')
+      .replace(/<head[\s\S]*?>[\s\S]*?<\/head>/i, '')
+      .replace(/<html[^>]*>/i, '')
+      .replace(/<\/html>/i, '')
+  }
+
   useEffect(() => {
     let active = true
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null
@@ -33,8 +46,9 @@ export default function DynamicPage({ slug }) {
 
     async function load() {
       if (!cleanSlug) {
+        try { console.warn('[DynamicPage] missing cleanSlug, prop slug=', slug, 'cleanSlug=', cleanSlug, 'path=', window.location.pathname) } catch (e) {}
         setPage(null)
-        setError('Page slug is missing.')
+        setError('Page slug is missing. (check incoming slug and router)')
         setLoading(false)
         return
       }
@@ -66,6 +80,7 @@ export default function DynamicPage({ slug }) {
         const data = await res.json()
         if (!active) return
         setPage(data || null)
+        setPageIndex(0)
         setLoading(false)
       } catch (err) {
         if (!active) return
@@ -116,12 +131,63 @@ export default function DynamicPage({ slug }) {
       ) : (
         <article className="dynamic-page">
           {page?.content ? (
-            <iframe
-              title={page?.title || 'Dynamic Page'}
-              className="dynamic-page-iframe"
-              sandbox=""
-              srcDoc={`<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">${page?.meta_title ? `<title>${String(page.meta_title).replace(/</g,'&lt;')}</title>` : ''}${page?.meta_description ? `<meta name=\"description\" content=\"${String(page.meta_description).replace(/"/g,'&quot;')}\">` : ''}</head><body>${page.content || ''}</body></html>`}
-            />
+            (function(){
+              const raw = String(page.content || '')
+              try { console.log('[DynamicPage] content length', raw.length) } catch(e){}
+              const isFullDoc = /^\s*(?:<!doctype|<html\b)/i.test(raw)
+              const looksLikeWord = /class=\"?Mso|<o:|<v:|<!--\[if|<\?xml/i.test(raw)
+              const tooLarge = raw.length > 6000
+              if (isFullDoc || looksLikeWord || tooLarge) {
+                const cleaned = extractBodyHtml(raw)
+                return (
+                  <div>
+                    <section className="dynamic-page-content" dangerouslySetInnerHTML={{ __html: cleaned }} />
+                  </div>
+                )
+              }
+
+              const marker = '<!--pagebreak-->'
+              let segments = []
+              if (raw.includes(marker)) {
+                segments = raw.split(marker).map(s=>s || '')
+              } else {
+                const blockRegex = /(<[^>]+>[^<]*?<\/(?:p|div|h[1-6]|li|blockquote|section|article|table|ul|ol)>)/gi
+                const parts = raw.match(blockRegex) || [raw]
+                const target = 3000
+                let acc = ''
+                for (const part of parts) {
+                  if ((acc + part).length > target && acc.trim()) {
+                    segments.push(acc)
+                    acc = part
+                  } else {
+                    acc += part
+                  }
+                }
+                if (acc) segments.push(acc)
+                if (segments.length === 1 && segments[0].length > target * 1.5) {
+                  const s = segments[0]
+                  segments = []
+                  for (let i = 0; i < s.length; i += target) segments.push(s.slice(i, i + target))
+                }
+              }
+
+              const idx = Math.max(0, Math.min(pageIndex, segments.length - 1))
+              const showPagination = segments.length > 1
+              return (
+                <div>
+                  <section className="dynamic-page-content" dangerouslySetInnerHTML={{ __html: segments[idx] || '' }} />
+                  {showPagination && (
+                    <div className="dynamic-page-pagination" aria-label="Page navigation">
+                      <div style={{display:'flex',gap:8,alignItems:'center',justifyContent:'center',marginTop:18,flexWrap:'wrap'}}>
+                        {segments.map((_,i)=> (
+                          <button key={i} onClick={()=>setPageIndex(i)} style={{fontWeight: i===idx?700:400,minWidth:36}}>{i+1}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()
           ) : (
             <section
               className="dynamic-page-content"

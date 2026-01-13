@@ -352,7 +352,10 @@ export default function Home({ search, setSearch }){
             <a href="/" onClick={(e)=>{e.preventDefault(); window.history.pushState({},'', '/'); window.dispatchEvent(new PopStateEvent('popstate'))}} className="view-all">View all →</a>
           </div>
           <div className="recent-grid">
-            {nonHeroBlogs.map(b=> (
+            {(function(){
+              // show only the 4 most recently published non-hero posts
+              const latest = (nonHeroBlogs || []).slice().sort((a,b)=> new Date(b.created_at) - new Date(a.created_at)).slice(0,4)
+              return latest.map(b=> (
               <article key={b.id} className="recent-card">
                 {b.featured_image ? <img src={b.featured_image} alt={b.title} className="recent-card-img" loading="lazy" decoding="async" /> : <div className="recent-card-img recent-card-img--placeholder" />}
                 <div className="recent-card-body">
@@ -361,7 +364,8 @@ export default function Home({ search, setSearch }){
                   <p className="muted" style={{fontSize:13}}>{stripHtml(b.summary || b.content_preview || b.content || '').slice(0,120)}{stripHtml(b.summary || b.content_preview || b.content || '').length>120?'…':''}</p>
                 </div>
               </article>
-            ))}
+              ))
+            })()}
           </div>
         </div>
       </section>

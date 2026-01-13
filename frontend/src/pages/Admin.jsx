@@ -1169,81 +1169,83 @@ export default function Admin(){
                   </div>
                 </form>
 
-                <h3 style={{marginTop:28}}>Saved Pages ({pages.length})</h3>
-                <form onSubmit={e=>{ e.preventDefault(); fetchDynamicPages({ search: pageSearch.trim() }); }} style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
-                  <input value={pageSearch} onChange={e=>setPageSearch(e.target.value)} placeholder="Search by title or slug" style={{flex:'1 1 240px'}} />
-                  <button type="submit">Search</button>
-                  <button type="button" onClick={()=>{ setPageSearch(''); fetchDynamicPages({ search: '' }); }}>Reset</button>
-                </form>
+                {(() => {
+                  const hiddenSlugs = new Set(['currentaffairs', 'general-knowledge'])
+                  const filteredPages = (pages || []).filter(p => {
+                    const s = normalizePageSlugInput(p.slug || p.slug_input || '')
+                    return !hiddenSlugs.has(s)
+                  })
+                  return (
+                    <>
+                      <h3 style={{marginTop:28}}>Saved Pages ({filteredPages.length})</h3>
+                      <form onSubmit={e=>{ e.preventDefault(); fetchDynamicPages({ search: pageSearch.trim() }); }} style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+                        <input value={pageSearch} onChange={e=>setPageSearch(e.target.value)} placeholder="Search by title or slug" style={{flex:'1 1 240px'}} />
+                        <button type="submit">Search</button>
+                        <button type="button" onClick={()=>{ setPageSearch(''); fetchDynamicPages({ search: '' }); }}>Reset</button>
+                      </form>
 
-                {pageLoading ? (
-                  <div style={{padding:12}}>Loading pages...</div>
-                ) : (
-                  pages.length === 0 ? (
-                    <div style={{padding:12,color:'#666'}}>No pages yet.</div>
-                  ) : (
-                    <div style={{overflowX:'auto'}}>
-                      <table className="admin-table" style={{width:'100%',borderCollapse:'collapse'}}>
-                        <thead>
-                          <tr>
-                            <th style={{textAlign:'left',padding:12}}>Title</th>
-                            <th style={{textAlign:'left',padding:12}}>Slug</th>
-                            <th style={{textAlign:'left',padding:12}}>Status</th>
-                            <th style={{textAlign:'left',padding:12}}>Updated</th>
-                            <th style={{textAlign:'left',padding:12}}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pages.map(p => {
-                            const normalizedSlug = normalizePageSlugInput(p.slug || p.slug_input || '')
-                            const slugPath = normalizedSlug ? '/' + normalizedSlug : ''
-                            const fullLink = slugPath ? ((siteOrigin || '') + slugPath) : ''
-                            const displaySlug = p.slug_input || (slugPath || '')
-                            let updatedLabel = '—'
-                            if (p.updated_at) {
-                              try {
-                                updatedLabel = new Date(p.updated_at).toLocaleString()
-                              } catch (err) {
-                                updatedLabel = p.updated_at
-                              }
-                            }
-                            return (
-                              <tr key={p.id} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
-                                <td style={{padding:12,verticalAlign:'top'}}>{p.title}</td>
-                                <td style={{padding:12,verticalAlign:'top'}}>
-                                  {displaySlug ? (
-                                    <div>
-                                      <div>{displaySlug}</div>
-                                      {fullLink && <div style={{fontSize:12,color:'#555',marginTop:4}}>{fullLink}</div>}
-                                    </div>
-                                  ) : '—'}
-                                </td>
-                                <td style={{padding:12,verticalAlign:'top'}}>{p.published ? 'Published' : 'Draft'}</td>
-                                <td style={{padding:12,verticalAlign:'top'}}>{updatedLabel}</td>
-                                <td style={{padding:12,verticalAlign:'top'}}>
-                                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                                    <button type="button" onClick={()=>loadDynamicPage(p.id)}>Edit</button>
-                                    {slugPath && (
-                                      <button type="button" onClick={()=>{
-                                        const target = fullLink || slugPath
-                                        const win = window.open(target, '_blank')
-                                        if (win) win.opener = null
-                                      }}>View</button>
-                                    )}
-                                    <button type="button" onClick={()=>removeDynamicPage(p.id)}>Delete</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      {pageLoading ? (
+                        <div style={{padding:12}}>Loading pages...</div>
+                      ) : (
+                        filteredPages.length === 0 ? (
+                          <div style={{padding:12,color:'#666'}}>No pages yet.</div>
+                        ) : (
+                          <div style={{overflowX:'auto'}}>
+                            <table className="admin-table" style={{width:'100%',borderCollapse:'collapse'}}>
+                              <thead>
+                                <tr>
+                                  <th style={{textAlign:'left',padding:12}}>Title</th>
+                                  <th style={{textAlign:'left',padding:12}}>Slug</th>
+                                  <th style={{textAlign:'left',padding:12}}>Status</th>
+                                  <th style={{textAlign:'left',padding:12}}>Updated</th>
+                                  <th style={{textAlign:'left',padding:12}}>Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {filteredPages.map(p => {
+                                  const normalizedSlug = normalizePageSlugInput(p.slug || p.slug_input || '')
+                                  const slugPath = normalizedSlug ? '/' + normalizedSlug : ''
+                                  const fullLink = slugPath ? ((siteOrigin || '') + slugPath) : ''
+                                  const displaySlug = p.slug_input || (slugPath || '')
+                                  let updatedLabel = '—'
+                                  if (p.updated_at) {
+                                    try { updatedLabel = new Date(p.updated_at).toLocaleString() } catch (err) { updatedLabel = p.updated_at }
+                                  }
+                                  return (
+                                    <tr key={p.id} style={{borderTop:'1px solid rgba(2,6,23,0.06)'}}>
+                                      <td style={{padding:12,verticalAlign:'top'}}>{p.title}</td>
+                                      <td style={{padding:12,verticalAlign:'top'}}>
+                                        {displaySlug ? (
+                                          <div>
+                                            <div>{displaySlug}</div>
+                                            {fullLink && <div style={{fontSize:12,color:'#555',marginTop:4}}>{fullLink}</div>}
+                                          </div>
+                                        ) : '—'}
+                                      </td>
+                                      <td style={{padding:12,verticalAlign:'top'}}>{p.published ? 'Published' : 'Draft'}</td>
+                                      <td style={{padding:12,verticalAlign:'top'}}>{updatedLabel}</td>
+                                      <td style={{padding:12,verticalAlign:'top'}}>
+                                        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                                          <button type="button" onClick={()=>loadDynamicPage(p.id)}>Edit</button>
+                                          {slugPath && (
+                                            <button type="button" onClick={()=>{ const target = fullLink || slugPath; const win = window.open(target, '_blank'); if (win) win.opener = null }}>View</button>
+                                          )}
+                                          <button type="button" onClick={()=>removeDynamicPage(p.id)}>Delete</button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+                    </>
                   )
-                )}
-              </div>
-            )}
-
+                })()}
+                </div>
+              )}
 
             {activePanel === 'branding' && (
               <div>
