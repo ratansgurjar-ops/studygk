@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 import { normalizeSlugPath } from '../utils/slug'
@@ -19,6 +19,8 @@ export default function DynamicPage({ slug }) {
   const [page, setPage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const containerRef = useRef(null)
+  const [pageHeadHtml, setPageHeadHtml] = useState('')
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -37,6 +39,13 @@ export default function DynamicPage({ slug }) {
       .replace(/<head[\s\S]*?>[\s\S]*?<\/head>/i, '')
       .replace(/<html[^>]*>/i, '')
       .replace(/<\/html>/i, '')
+  }
+
+  function extractHeadHtml(raw) {
+    if (!raw) return ''
+    const m = raw.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
+    if (m && m[1]) return m[1]
+    return ''
   }
 
   useEffect(() => {
@@ -80,6 +89,12 @@ export default function DynamicPage({ slug }) {
         const data = await res.json()
         if (!active) return
         setPage(data || null)
+        // extract head HTML (styles/scripts) when page contains a full document
+        try {
+          const raw = data && data.content ? String(data.content) : ''
+          const headHtml = extractHeadHtml(raw)
+          setPageHeadHtml(headHtml || '')
+        } catch (err) { setPageHeadHtml('') }
         setPageIndex(0)
         setLoading(false)
       } catch (err) {
@@ -98,6 +113,89 @@ export default function DynamicPage({ slug }) {
       if (controller) controller.abort()
     }
   }, [cleanSlug])
+
+  // Execute any <script> tags present in the injected HTML because
+  // browsers do not execute scripts inserted via innerHTML.
+  useEffect(() => {
+    try {
+      const root = containerRef && containerRef.current
+      if (!root) return
+      // if head HTML exists, inject its styles and execute its scripts
+      if (pageHeadHtml) {
+        const temp = document.createElement('div')
+        temp.innerHTML = pageHeadHtml
+        // inject styles
+        const styles = Array.from(temp.querySelectorAll('style'))
+        styles.forEach(s => {
+          const st = document.createElement('style')
+          st.textContent = s.textContent || ''
+          st.setAttribute('data-dynamic-head', '1')
+          document.head.appendChild(st)
+        })
+        // inject link stylesheets
+        const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'))
+        links.forEach(l => {
+          const href = l.getAttribute('href')
+          if (!href) return
+          // avoid duplicates
+          if (Array.from(document.head.querySelectorAll('link[rel="stylesheet"]')).some(existing => existing.href === href)) return
+          const nl = document.createElement('link')
+          nl.rel = 'stylesheet'
+          nl.href = href
+          nl.setAttribute('data-dynamic-head', '1')
+          document.head.appendChild(nl)
+        })
+        // execute head scripts
+        const headScripts = Array.from(temp.querySelectorAll('script'))
+        headScripts.forEach(old => {
+          const script = document.createElement('script')
+          for (let i = 0; i < old.attributes.length; i++) {
+            const a = old.attributes[i]
+            if (a.name === 'src') script.src = a.value
+            else if (a.name === 'type') script.type = a.value
+            else if (a.name === 'async') script.async = true
+            else script.setAttribute(a.name, a.value)
+          }
+          if (!old.src) script.textContent = old.textContent || ''
+          script.setAttribute('data-dynamic-head', '1')
+          document.head.appendChild(script)
+        })
+      }
+      
+      // find script tags inside the rendered content
+      const contentNodes = root.querySelectorAll('.dynamic-page-content')
+      contentNodes.forEach(node => {
+        const scripts = Array.from(node.querySelectorAll('script'))
+        scripts.forEach(old => {
+          if (old.getAttribute('data-executed')) return
+          const script = document.createElement('script')
+          // copy attributes except innerHTML
+          for (let i = 0; i < old.attributes.length; i++) {
+            const a = old.attributes[i]
+            if (a.name === 'src') {
+              script.src = a.value
+            } else if (a.name === 'type') {
+              script.type = a.value
+            } else if (a.name === 'async') {
+              // preserve async if present
+              script.async = true
+            } else {
+              script.setAttribute(a.name, a.value)
+            }
+          }
+          // copy inline content
+          if (!old.src) script.textContent = old.textContent || ''
+          script.setAttribute('data-executed', '1')
+          // replace the old script with the new one so it executes
+          old.parentNode.insertBefore(script, old)
+          old.parentNode.removeChild(old)
+        })
+      })
+    } catch (err) {
+      // non-fatal
+      try { console.warn('DynamicPage script exec failed', err) } catch(e){}
+    }
+  }, [page, pageIndex])
 
   const meta = useMemo(() => {
     const title = page?.meta_title || page?.title || 'Page'
@@ -129,7 +227,7 @@ export default function DynamicPage({ slug }) {
           <p>{error}</p>
         </div>
       ) : (
-        <article className="dynamic-page">
+        <article className="dynamic-page" ref={containerRef}>
           {page?.content ? (
             (function(){
               const raw = String(page.content || '')

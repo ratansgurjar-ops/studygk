@@ -458,10 +458,15 @@ export default function Admin(){
       if (!res.ok) { alert('Unable to load page'); return }
       const data = await res.json()
       setEditingPageId(data.id || id)
+      // detect if this page was saved as a "code" page (contains <script> or <style> or our runner id)
+      const rawContent = data.content || ''
+      const looksLikeCode = /<script[\s\S]*?>|<style[\s\S]*?>|id=["']code-runner-root["']/i.test(rawContent)
       setPageForm({
         title: data.title || '',
         slugInput: data.slug_input || data.slug || '',
-        content: data.content || '',
+        content: looksLikeCode ? '' : rawContent,
+        code: looksLikeCode ? rawContent : '',
+        type: looksLikeCode ? 'code' : 'jodit',
         meta_title: data.meta_title || '',
         meta_description: data.meta_description || '',
         keywords: data.keywords || '',
@@ -483,7 +488,8 @@ export default function Admin(){
       const payload = {
         title: pageForm.title || '',
         slug: pageForm.slugInput || '',
-        content: pageForm.content || '',
+        // if this is a code page prefer the combined `code` field; otherwise use `content`
+        content: (pageForm.type === 'code' ? (pageForm.code || pageForm.content || '') : (pageForm.content || pageForm.code || '')),
         meta_title: pageForm.meta_title || '',
         meta_description: pageForm.meta_description || '',
         keywords: pageForm.keywords || '',
@@ -500,10 +506,15 @@ export default function Admin(){
       const data = await res.json()
       const newId = data && data.id ? data.id : editingPageId
       setEditingPageId(newId || null)
+      // after save, detect code pages and keep `type` and `code` populated so editor stays in code mode
+      const savedContent = data.content || ''
+      const savedLooksLikeCode = /<script[\s\S]*?>|<style[\s\S]*?>|id=["']code-runner-root["']/i.test(savedContent)
       setPageForm({
         title: data.title || '',
         slugInput: data.slug_input || data.slug || '',
-        content: data.content || '',
+        content: savedLooksLikeCode ? '' : savedContent,
+        code: savedLooksLikeCode ? savedContent : '',
+        type: savedLooksLikeCode ? 'code' : 'jodit',
         meta_title: data.meta_title || '',
         meta_description: data.meta_description || '',
         keywords: data.keywords || '',
@@ -1139,12 +1150,44 @@ export default function Admin(){
                   <input value={pageForm.meta_title} onChange={e=>setPageForm({...pageForm,meta_title:e.target.value})} placeholder="Meta title (optional)" />
                   <textarea value={pageForm.meta_description} onChange={e=>setPageForm({...pageForm,meta_description:e.target.value})} placeholder="Meta description" rows={2} style={{width:'100%'}} />
                   <input value={pageForm.keywords} onChange={e=>setPageForm({...pageForm,keywords:e.target.value})} placeholder="Keywords (comma separated)" />
-                  <JoditEditor
-                    ref={pageEditorRef}
-                    value={pageForm.content}
-                    config={joditConfig}
-                    onBlur={setPageFormContent}
-                  />
+
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <label style={{marginRight:8}}>Page Type</label>
+                    <select value={pageForm.type || 'jodit'} onChange={e=>{ const t = e.target.value; setPageForm(prev=>({ ...prev, type: t })); if (t === 'jodit') { /* keep existing content */ } }}>
+                      <option value="jodit">Rich HTML (editor)</option>
+                      <option value="code">Code Runner (HTML/CSS/JS)</option>
+                    </select>
+                  </div>
+
+                  { (pageForm.type || 'jodit') === 'code' ? (
+                    <div style={{marginTop:12}}>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:12}}>
+                        <div>
+                          <label style={{fontWeight:600}}>Combined Code (include &lt;style&gt; and &lt;script&gt; if needed)</label>
+                          <textarea rows={15} value={pageForm.code||''} onChange={e=>{ const v = e.target.value; setPageForm(prev=>({ ...prev, code: v })); }} style={{width:'100%',padding:8,borderRadius:6,fontFamily:'monospace'}}/>
+                          <div style={{marginTop:8,fontSize:13,color:'#6b7280'}}>You can include HTML, CSS (&lt;style&gt;) and JavaScript (&lt;script&gt;) together in this box.</div>
+                        </div>
+
+                        <div>
+                          <div style={{display:'flex',gap:8,marginBottom:8}}>
+                            <button type="button" onClick={()=>{ setPageForm(prev=>({ ...prev, code: '' })); }}>Clear</button>
+                          </div>
+
+                          <div style={{border:'1px solid #e5e7eb',borderRadius:8,overflow:'hidden'}}>
+                            <iframe title="Code preview" style={{width:'100%',height:340,border:0}} srcDoc={("<meta charset=\"utf-8\">" + (pageForm.code||''))}></iframe>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{marginTop:8,color:'#6b7280',fontSize:13}}>Tip: click <strong>Insert to content</strong> to save the composed code into the page's content before creating/updating the page.</div>
+                    </div>
+                  ) : (
+                    <JoditEditor
+                      ref={pageEditorRef}
+                      value={pageForm.content}
+                      config={joditConfig}
+                      onBlur={setPageFormContent}
+                    />
+                  ) }
                   <label style={{display:'flex',alignItems:'center',gap:8}}>
                     <input type="checkbox" checked={pageForm.published} onChange={e=>setPageForm({...pageForm,published:e.target.checked})} />
                     Published
