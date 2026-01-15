@@ -1280,7 +1280,7 @@ app.get('/api/search', asyncHandler(async (req, res) => {
 // sitemap.xml (extended)
 app.get('/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
+    const base = process.env.SITE_URL || 'https://www.studygkhub.com'
     const urlEntries = [];
 
     // Always include a few important static routes
@@ -1348,7 +1348,7 @@ app.get('/sitemap.xml', asyncHandler(async (req, res) => {
 // General Knowledge questions sitemap
 app.get('/general-knowledge/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
+    const base = process.env.SITE_URL || 'https://www.studygkhub.com'
     const now = new Date().toISOString();
     const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE (chapter_name IS NULL OR chapter_name NOT LIKE '%Current Affairs%')");
     const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
@@ -1369,7 +1369,7 @@ app.get('/general-knowledge/sitemap.xml', asyncHandler(async (req, res) => {
 // Current Affairs questions sitemap
 app.get('/currentaffairs/sitemap.xml', asyncHandler(async (req, res) => {
   try{
-    const base = process.env.SITE_URL || ((req.protocol || 'http') + '://' + req.get('host'))
+    const base = process.env.SITE_URL || 'https://www.studygkhub.com'
     const now = new Date().toISOString();
     const rowsRes = await dbQuery("SELECT slug, id, created_at, chapter_name FROM questions WHERE chapter_name LIKE '%Current Affairs%'");
     const rows = Array.isArray(rowsRes) && rowsRes[0] ? rowsRes[0] : rowsRes;
@@ -1389,7 +1389,7 @@ app.get('/currentaffairs/sitemap.xml', asyncHandler(async (req, res) => {
 
 // robots.txt
 app.get('/robots.txt', (req, res) => {
-  const base = (req.protocol || 'http') + '://' + req.get('host')
+  const base = process.env.SITE_URL || 'https://www.studygkhub.com'
   const txt = `User-agent: *\nAllow: /\nSitemap: ${base}/sitemap.xml\n`;
   res.header('Content-Type','text/plain').send(txt)
 })

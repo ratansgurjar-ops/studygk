@@ -1,48 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>http://localhost:5173/</loc>
+    <loc>https://www.studygkhub.com/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/about</loc>
+    <loc>https://www.studygkhub.com/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/contact</loc>
+    <loc>https://www.studygkhub.com/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/terms</loc>
+    <loc>https://www.studygkhub.com/terms</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/promotion-policy</loc>
+    <loc>https://www.studygkhub.com/policy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/general-knowledge</loc>
+    <loc>https://www.studygkhub.com/general-knowledge</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/posts</loc>
-    <changefreq>weekly</changefreq>
+    <loc>https://www.studygkhub.com/currentaffairs</loc>
+    <changefreq>daily</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/general-knowledge/sitemap.xml</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>http://localhost:5173/currentaffairs/sitemap.xml</loc>
-    <changefreq>daily</changefreq>
+    <loc>https://www.studygkhub.com/request</loc>
+    <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 </urlset>
