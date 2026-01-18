@@ -423,7 +423,7 @@ export default function QuestionSetGenerator({ token }) {
   }
 
   const saveNotesToDb = async () => {
-    if (!noteContent) return
+    if (!noteContent) return alert('Please enter content before saving.')
     try {
       const res = await fetch('/api/admin/notes', {
         method: 'POST',
@@ -740,6 +740,9 @@ export default function QuestionSetGenerator({ token }) {
             <label>Meta Description (SEO) <textarea rows={2} value={noteConfig.meta_description} onChange={e => setNoteConfig({...noteConfig, meta_description: e.target.value})} /></label>
             
             <label>SEO Body / Content (Manual Edit) <textarea rows={6} value={noteContent} onChange={e => setNoteContent(e.target.value)} placeholder="Generated content will appear here. You can also write manually." /></label>
+            <div style={{gridColumn:'1/-1', marginTop:5}}>
+              <button onClick={saveNotesToDb} className="primary-btn" style={{background:'#10b981'}}>Submit SEO & Content</button>
+            </div>
           </div>
           <div className="actions">
             <button onClick={generateNotes} disabled={noteLoading} className="primary-btn big">
