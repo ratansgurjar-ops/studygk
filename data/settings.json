@@ -11,6 +11,6 @@
   "amazon_affiliate_enabled": true,
   "amazon_affiliate_disclosure": "As an Amazon Associate, Study GK Hub earns from qualifying purchases. This helps us keep providing free educational content and honest product reviews.\n",
   "ai_config": {
-    "apiKey": ""
+    "apiKey": "sk-..."
   }
 }
