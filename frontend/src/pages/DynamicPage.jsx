@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
 
 import { normalizeSlugPath } from '../utils/slug'
+import ExamNotes from './ExamNotes.jsx'
 
 function stripHtml(html) {
   if (!html) return ''
@@ -15,12 +16,26 @@ function stripHtml(html) {
 
 export default function DynamicPage({ slug }) {
   const cleanSlug = normalizeSlugPath(slug)
+
+  if (cleanSlug === 'examnotes') {
+    return <ExamNotes />
+  }
+
   const [pageIndex, setPageIndex] = useState(0)
   const [page, setPage] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const containerRef = useRef(null)
   const [pageHeadHtml, setPageHeadHtml] = useState('')
+  const [otherPages, setOtherPages] = useState([])
+  const [otherDropdownOpen, setOtherDropdownOpen] = useState(false)
+
+  useEffect(()=>{
+    fetch('/api/pages-public')
+      .then(r=>r.json())
+      .then(d=> setOtherPages(Array.isArray(d) ? d : []))
+      .catch(()=> setOtherPages([]))
+  },[])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -207,6 +222,24 @@ export default function DynamicPage({ slug }) {
 
   return (
     <div className="dynamic-page-shell">
+      <header className="dynamic-header">
+        <a href="/">Home</a>
+        <a href="/general-knowledge">General Knowledge</a>
+        <a href="/currentaffairs">Current Affairs</a>
+        <a href="/examnotes">Exam Notes</a>
+        <a href="/">Blog</a>
+        <div style={{position:'relative'}}>
+          <button className="header-link-btn" onClick={()=>setOtherDropdownOpen(!otherDropdownOpen)}>Other</button>
+          {otherDropdownOpen && (
+            <div className="dropdown-menu">
+              {otherPages.map(p => (
+                <a key={p.id} href={`/${p.slug}`}>{p.title}</a>
+              ))}
+            </div>
+          )}
+        </div>
+      </header>
+
       <Helmet>
         <title>{meta.title}</title>
         {meta.description && <meta name="description" content={meta.description} />}
@@ -294,6 +327,16 @@ export default function DynamicPage({ slug }) {
           )}
         </article>
       )}
+
+      <style>{`
+        .dynamic-header { display: flex; gap: 20px; padding: 15px 20px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; align-items: center; background: #fff; justify-content: center; }
+        .dynamic-header a, .header-link-btn { text-decoration: none; color: #334155; font-weight: 600; font-size: 1rem; background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; }
+        .dynamic-header a:hover, .header-link-btn:hover { color: #2563eb; }
+        
+        .dropdown-menu { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: white; border: 1px solid #e2e8f0; z-index: 1000; min-width: 200px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); padding: 5px 0; margin-top: 10px; }
+        .dropdown-menu a { display: block; padding: 8px 16px; font-size: 0.9rem; font-weight: 500; color: #475569; text-align: left; }
+        .dropdown-menu a:hover { background: #f1f5f9; color: #2563eb; }
+      `}</style>
     </div>
   )
 }

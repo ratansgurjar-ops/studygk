@@ -9,5 +9,8 @@
   "request_meta_description": "Study GK Hub से content request, product suggestion या brand collaboration के लिए संपर्क करें। Education और product related queries यहाँ भेजें।\n",
   "site_keywords": "Study GK Hub, education blog, GK blog, current affairs, competitive exams, product reviews, amazon affiliate blog, best deals, online learning, exam preparation, branded products review, Business & Marketing, Health & Fitness, Personal, Finance, Technology, Travel",
   "amazon_affiliate_enabled": true,
-  "amazon_affiliate_disclosure": "As an Amazon Associate, Study GK Hub earns from qualifying purchases. This helps us keep providing free educational content and honest product reviews.\n"
+  "amazon_affiliate_disclosure": "As an Amazon Associate, Study GK Hub earns from qualifying purchases. This helps us keep providing free educational content and honest product reviews.\n",
+  "ai_config": {
+    "apiKey": ""
+  }
 }

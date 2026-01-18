@@ -18,12 +18,33 @@ export default function GeneralKnowledge(){
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [otherPages, setOtherPages] = useState([])
+  const [otherDropdownOpen, setOtherDropdownOpen] = useState(false)
 
   useEffect(()=>{
     fetchMeta()
     fetchQuestions({ page: 1, append: false })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(()=>{
+    fetch('/api/pages-public')
+      .then(r=>r.json())
+      .then(d=> setOtherPages(Array.isArray(d) ? d : []))
+      .catch(()=> setOtherPages([]))
+  },[])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.nav-dropdown-container')) {
+        setOtherDropdownOpen(false);
+      }
+    };
+    if (otherDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [otherDropdownOpen]);
 
   // When category changes, refresh the chapters list filtered by the category
   useEffect(()=>{
@@ -187,7 +208,18 @@ export default function GeneralKnowledge(){
             <button className="nav-btn nav-btn--small" onClick={()=>{ try{ window.history.pushState({},'', '/'); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/' } }}>Home</button>
             <button className="nav-btn nav-btn--small" onClick={()=>{ try{ window.history.pushState({},'', '/general-knowledge'); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/general-knowledge' } }}>General Knowledge</button>
             <button className="nav-btn nav-btn--small" onClick={()=>{ try{ window.history.pushState({},'', '/currentaffairs'); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/currentaffairs' } }}>Current Affairs</button>
+            <button className="nav-btn nav-btn--small" onClick={()=>{ try{ window.history.pushState({},'', '/examnotes'); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/examnotes' } }}>Exam Notes</button>
             <button className="nav-btn nav-btn--small" onClick={()=>{ try{ window.history.pushState({},'', '/'); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = '/' } }}>Blog</button>
+            <div className="nav-dropdown-container" style={{position:'relative'}}>
+              <button className="nav-btn nav-btn--small" onClick={()=>setOtherDropdownOpen(!otherDropdownOpen)}>Other</button>
+              {otherDropdownOpen && (
+                <div className="dropdown-menu" style={{position:'absolute', top:'100%', left:0, background:'white', border:'1px solid #e2e8f0', zIndex:1000, minWidth:160, borderRadius:8, boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', overflow:'hidden'}}>
+                  {otherPages.map(p => (
+                    <a key={p.id} href={`/${p.slug}`} onClick={(e)=>{e.preventDefault(); try{ window.history.pushState({},'', `/${p.slug}`); window.dispatchEvent(new PopStateEvent('popstate')) }catch(err){ window.location.href = `/${p.slug}` }; setOtherDropdownOpen(false)}} style={{display:'block', padding:'8px 12px', textDecoration:'none', color:'#1e293b', fontSize:13, borderBottom:'1px solid #f1f5f9'}}>{p.title}</a>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

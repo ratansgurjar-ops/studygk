@@ -66,6 +66,8 @@ export default function App(){
   const [categories, setCategories] = useState([])
   const [mobileCatsOpen, setMobileCatsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [otherPages, setOtherPages] = useState([])
+  const [otherDropdownOpen, setOtherDropdownOpen] = useState(false)
 
   useEffect(() => {
     const script = document.createElement('script');
@@ -93,6 +95,25 @@ export default function App(){
       .then(d=> setCategories(Array.isArray(d) ? d : []))
       .catch(()=> setCategories([]))
   },[])
+
+  useEffect(()=>{
+    fetch('/api/pages-public')
+      .then(r=>r.json())
+      .then(d=> setOtherPages(Array.isArray(d) ? d : []))
+      .catch(()=> setOtherPages([]))
+  },[])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.nav-dropdown')) {
+        setOtherDropdownOpen(false);
+      }
+    };
+    if (otherDropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [otherDropdownOpen]);
 
   const getSelectedCategory = ()=>{
     try{ return new URLSearchParams(window.location.search).get('category') || '' }catch(e){ return '' }
@@ -169,7 +190,18 @@ export default function App(){
                 <button className="nav-btn" onClick={()=>nav('/')}>Home</button>
                 <button className="nav-btn" onClick={()=>nav('/general-knowledge')}>General Knowledge</button>
                 <button className="nav-btn" onClick={()=>nav('/currentaffairs')}>Current Affairs</button>
+                <button className="nav-btn" onClick={()=>nav('/examnotes')}>Exam Notes</button>
                 <button className="nav-btn" onClick={()=>nav('/')}>Blog</button>
+                <div className="nav-dropdown" style={{position:'relative'}}>
+                  <button className="nav-btn" onClick={()=>setOtherDropdownOpen(!otherDropdownOpen)}>Other</button>
+                  {otherDropdownOpen && (
+                    <div className="dropdown-menu" style={{position:'absolute', top:'100%', left:0, background:'white', border:'1px solid #ccc', zIndex:1000, minWidth:200}}>
+                      {otherPages.map(p => (
+                        <a key={p.id} href={`/${p.slug}`} onClick={(e)=>{e.preventDefault(); nav(`/${p.slug}`); setOtherDropdownOpen(false)}} style={{display:'block', padding:'8px 12px', textDecoration:'none', color:'black'}}>{p.title}</a>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </nav>
             </div>
           </div>
@@ -223,6 +255,7 @@ export default function App(){
             : isPostRoute ? <Post slug={safeDecode(pathOnly.replace('/posts/',''))} />
             : pathOnly === '/general-knowledge' ? <GeneralKnowledge />
             : pathOnly === '/currentaffairs' ? <CurrentAffairs />
+            : dynamicSlug ? <DynamicPage slug={dynamicSlug} />
             : <Home search={search} setSearch={setSearch} />}
         </Suspense>
       </main>

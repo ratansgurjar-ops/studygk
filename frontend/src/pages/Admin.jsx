@@ -4,6 +4,7 @@ import 'react-quill/dist/quill.snow.css'
 import JoditEditor from 'jodit-react'
 import 'jodit/build/jodit.min.css'
 import AdminGK from '../components/AdminGK'
+import QuestionSetGenerator from '../components/QuestionSetGenerator'
 
 function normalizePageSlugInput(value) {
   if (value === undefined || value === null) return ''
@@ -762,6 +763,7 @@ export default function Admin(){
               <button className={`side-btn ${activePanel==='comments'?'active':''}`} onClick={()=>{ setActivePanel('comments'); fetchAdminComments({ status: commentStatusFilter, blog_id: commentBlogFilter }); }}>Comments</button>
               <button className={`side-btn ${activePanel==='questions'?'active':''}`} onClick={()=>{ setActivePanel('questions'); }}>GK Questions</button>
               <button className={`side-btn ${activePanel==='current-affairs'?'active':''}`} onClick={()=>{ setActivePanel('current-affairs'); }}>Current Affairs</button>
+              <button className={`side-btn ${activePanel==='ai-generator'?'active':''}`} onClick={()=>{ setActivePanel('ai-generator'); }}>AI Question Generator</button>
               <button className={`side-btn ${activePanel==='page-seo'?'active':''}`} onClick={()=>{ setActivePanel('page-seo'); }}>Page SEO (GK/CA)</button>
               <button className={`side-btn ${activePanel==='settings'?'active':''}`} onClick={()=>setActivePanel('settings')}>Settings</button>
               <div style={{marginTop:12}}><button onClick={logout}>Logout</button></div>
@@ -773,6 +775,10 @@ export default function Admin(){
               <SettingsPanel token={token} />
             )}
             
+            {activePanel === 'ai-generator' && (
+              <QuestionSetGenerator token={token} />
+            )}
+
             {activePanel === 'questions' && (
               <AdminGK token={token} initialCategoryFilter={initialGKCategory} />
             )}
@@ -1779,6 +1785,13 @@ function SettingsPanel({ token }){
         </div>
         <div><label className="field-label">Amazon Affiliate Tag (for Amazon links)</label><input value={settings.amazon_affiliate_tag||''} onChange={e=>setSettings({...settings,amazon_affiliate_tag:e.target.value})} placeholder="your-associate-tag-20" /></div>
         <div><label className="field-label">Amazon Affiliate Disclosure (shown on pages)</label><textarea value={settings.amazon_affiliate_disclosure||''} onChange={e=>setSettings({...settings,amazon_affiliate_disclosure:e.target.value})} rows={2} /></div>
+        <div style={{marginTop:12}}>
+          <h3>AI Configuration</h3>
+          <p className="muted">Configure your AI provider for automatic question generation.</p>
+          <div><label className="field-label">AI API Key</label><input type="password" value={settings.ai_config?.apiKey||''} onChange={e=>setSettings({...settings, ai_config: {...(settings.ai_config||{}), apiKey: e.target.value}})} placeholder="sk-..." /></div>
+          <div><label className="field-label">Base URL (optional)</label><input value={settings.ai_config?.baseUrl||''} onChange={e=>setSettings({...settings, ai_config: {...(settings.ai_config||{}), baseUrl: e.target.value}})} placeholder="https://api.openai.com/v1/chat/completions" /></div>
+          <div><label className="field-label">Model Name</label><input value={settings.ai_config?.model||''} onChange={e=>setSettings({...settings, ai_config: {...(settings.ai_config||{}), model: e.target.value}})} placeholder="gpt-3.5-turbo" /></div>
+        </div>
         <div style={{marginTop:12}}>
           <button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Save Settings'}</button>
         </div>

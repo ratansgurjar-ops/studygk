@@ -7,6 +7,8 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const authMiddleware = require('./middleware/authMiddleware');
+const aiRoutes = require('./routes/aiRoutes');
 require('dotenv').config();
 
 const PORT = process.env.PORT || 4000;
@@ -53,7 +55,8 @@ function readSettings(){
         site_keywords: 'blog,branding,free feature,backlinks',
         amazon_affiliate_tag: '',
         amazon_affiliate_enabled: false,
-        amazon_affiliate_disclosure: 'As an Amazon Associate we may earn from qualifying purchases.'
+        amazon_affiliate_disclosure: 'As an Amazon Associate we may earn from qualifying purchases.',
+        ai_config: { apiKey: '', baseUrl: 'https://api.openai.com/v1/chat/completions', model: 'gpt-3.5-turbo' }
       };
       fs.writeFileSync(settingsFile, JSON.stringify(def, null, 2));
       return def;
@@ -257,7 +260,7 @@ async function dbQuery(sql, params = []) {
   }
   if (!pool) throw new Error('Database pool not initialised');
   try {
-    return await pool.execute(sql, params);
+    return await pool.query(sql, params);
   } catch (err) {
     // Attempt recovery for common MySQL errors
     try {
@@ -279,7 +282,7 @@ async function dbQuery(sql, params = []) {
             console.warn('Data too long for', table + '.' + column, '- attempting to ALTER to LONGTEXT');
             await pool.query(`ALTER TABLE \`${table}\` MODIFY COLUMN \`${column}\` LONGTEXT`);
             // retry the original query once
-            return await pool.execute(sql, params);
+            return await pool.query(sql, params);
           } catch (alterErr) {
             console.warn('Failed to ALTER column to LONGTEXT', alterErr && alterErr.message ? alterErr.message : alterErr);
           }
@@ -314,7 +317,7 @@ async function dbQuery(sql, params = []) {
             }
           }
           // retry the original query once
-          return await pool.execute(sql, params);
+          return await pool.query(sql, params);
         }
       }
     } catch (recoveryErr) {
@@ -399,6 +402,23 @@ async function initDb() {
       '  down_votes INTEGER DEFAULT 0,',
       '  author TEXT,',
       '  published INTEGER DEFAULT 0,',
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
+
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS notes (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  exam TEXT,',
+      '  subject TEXT,',
+      '  chapter TEXT,',
+      '  language TEXT,',
+      '  content TEXT,',
+      '  slug TEXT UNIQUE,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  active INTEGER DEFAULT 1,',
       "  created_at TEXT DEFAULT (datetime('now')),",
       "  updated_at TEXT DEFAULT (datetime('now'))",
       ');'
@@ -582,6 +602,34 @@ async function initDb() {
       "  FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE",
       ');'
     ]));
+    
+    // Question Sets tables
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS question_sets (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  name TEXT,',
+      '  exam_name TEXT,',
+      '  total_questions INTEGER,',
+      "  status TEXT DEFAULT 'draft',",
+      "  created_at TEXT DEFAULT (datetime('now')),",
+      "  updated_at TEXT DEFAULT (datetime('now'))",
+      ');'
+    ]));
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS question_set_items (',
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,',
+      '  set_id INTEGER,',
+      '  question_id INTEGER,',
+      '  question_order INTEGER,',
+      '  FOREIGN KEY(set_id) REFERENCES question_sets(id) ON DELETE CASCADE,',
+      '  FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE CASCADE',
+      ');'
+    ]));
+    
+    // Add new columns to questions if missing
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN marks REAL DEFAULT 1'); } catch(e){}
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN negative_marks REAL DEFAULT 0'); } catch(e){}
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN difficulty_level TEXT DEFAULT "Medium"'); } catch(e){}
 
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_question TEXT'); } catch(e){}
     try { await dbQuery('ALTER TABLE admins ADD COLUMN secret_answer TEXT'); } catch(e){}
@@ -629,6 +677,9 @@ async function initDb() {
       '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
       ') ENGINE=InnoDB;'
     ]));
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN marks FLOAT DEFAULT 1'); } catch(e){}
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN negative_marks FLOAT DEFAULT 0'); } catch(e){}
+    try { await dbQuery('ALTER TABLE questions ADD COLUMN difficulty_level VARCHAR(50) DEFAULT "Medium"'); } catch(e){}
 
     await dbQuery(sql([
       'CREATE TABLE IF NOT EXISTS feedbacks (',
@@ -722,6 +773,52 @@ async function initDb() {
       '  resolved_at TIMESTAMP NULL',
       ') ENGINE=InnoDB;'
     ]));
+
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS notes (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  exam VARCHAR(255),',
+      '  subject VARCHAR(255),',
+      '  chapter VARCHAR(255),',
+      '  language VARCHAR(100),',
+      '  content LONGTEXT,',
+      '  active BOOLEAN DEFAULT TRUE,',
+      '  slug VARCHAR(255) UNIQUE,',
+      '  meta_title TEXT,',
+      '  meta_description TEXT,',
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
+    try { await dbQuery('ALTER TABLE notes ADD COLUMN active INTEGER DEFAULT 1'); } catch(e){} // SQLite
+    try { await dbQuery('ALTER TABLE notes ADD COLUMN active BOOLEAN DEFAULT TRUE'); } catch(e){} // MySQL
+    
+    try { await dbQuery('ALTER TABLE notes ADD COLUMN slug TEXT'); } catch(e){}
+    try { await dbQuery('ALTER TABLE notes ADD COLUMN meta_title TEXT'); } catch(e){}
+    try { await dbQuery('ALTER TABLE notes ADD COLUMN meta_description TEXT'); } catch(e){}
+
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS question_sets (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  name VARCHAR(255),',
+      '  exam_name VARCHAR(255),',
+      '  total_questions INT,',
+      "  status VARCHAR(50) DEFAULT 'draft',",
+      '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,',
+      '  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+      ') ENGINE=InnoDB;'
+    ]));
+    await dbQuery(sql([
+      'CREATE TABLE IF NOT EXISTS question_set_items (',
+      '  id INT AUTO_INCREMENT PRIMARY KEY,',
+      '  set_id INT,',
+      '  question_id INT,',
+      '  question_order INT,',
+      '  FOREIGN KEY (set_id) REFERENCES question_sets(id) ON DELETE CASCADE,',
+      '  FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE',
+      ') ENGINE=InnoDB;'
+    ]));
+    
     // Ensure `image` column exists in MySQL (check INFORMATION_SCHEMA then alter if missing)
     try {
       if (pool) {
@@ -1003,21 +1100,6 @@ app.get('/api/categories', asyncHandler(async (req, res) => {
   const [rows] = await dbQuery(sql);
   res.json((rows || []).map(r => r.category).filter(Boolean));
 }));
-
-function authMiddleware(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
-  const parts = auth.split(' ');
-  if (parts.length !== 2) return res.status(401).json({ error: 'Unauthorized' });
-  const token = parts[1];
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.admin = payload;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
 
 app.post('/api/admin/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -1332,6 +1414,18 @@ app.get('/sitemap.xml', asyncHandler(async (req, res) => {
       pushRows(questions, '/general-knowledge/');
     }catch(e){}
 
+    // notes
+    try{
+      const [notes] = await dbQuery('SELECT slug, id, updated_at, created_at FROM notes WHERE active = 1');
+      pushRows(notes, '/notes/');
+    }catch(e){}
+
+    // notes
+    try{
+      const [notes] = await dbQuery('SELECT slug, id, updated_at, created_at FROM notes WHERE active = 1');
+      pushRows(notes, '/notes/');
+    }catch(e){}
+
     // build xml
     // Also expose section sitemap files so crawlers can discover them easily
     try{
@@ -1555,6 +1649,7 @@ app.get('/api/public-settings', asyncHandler(async (req, res) => {
     amazon_affiliate_tag: s.amazon_affiliate_tag || '',
     amazon_affiliate_enabled: !!s.amazon_affiliate_enabled,
     amazon_affiliate_disclosure: s.amazon_affiliate_disclosure || ''
+    // Note: ai_config is NOT exposed publicly
   });
 }));
 
@@ -1605,6 +1700,23 @@ app.delete('/api/blogs/:id', authMiddleware, asyncHandler(async (req, res) => {
 app.get('/api/pages/slug/:slug', asyncHandler(async (req, res) => {
   const slugParam = req.params.slug;
   const slug = normalizePageSlug(slugParam);
+
+  // Special handling for notes served via dynamic page route
+  if (slug.startsWith('notes/')) {
+    const noteSlug = slug.replace(/^notes\//, '');
+    const [rows] = await dbQuery('SELECT * FROM notes WHERE slug = ? AND active = 1 LIMIT 1', [noteSlug]);
+    if (rows && rows.length > 0) {
+      const note = rows[0];
+      return res.json({
+        title: note.chapter,
+        content: note.content,
+        meta_title: note.meta_title || note.chapter,
+        meta_description: note.meta_description,
+        keywords: note.subject
+      });
+    }
+  }
+
   if (!slug) return res.status(404).json({ error: 'Not found' });
   const [rows] = await dbQuery('SELECT * FROM pages WHERE slug = ? AND published = 1 LIMIT 1', [slug]);
   if (!rows || rows.length === 0) return res.status(404).json({ error: 'Not found' });
@@ -1625,6 +1737,11 @@ app.get('/api/pages', authMiddleware, asyncHandler(async (req, res) => {
   }
   const list = Array.isArray(rows) ? rows : [];
   res.json(list.map(normalizePageRow));
+}));
+
+app.get('/api/pages-public', asyncHandler(async (req, res) => {
+  const [rows] = await dbQuery('SELECT id, title, slug, meta_description, created_at FROM pages WHERE published = 1 ORDER BY created_at DESC LIMIT 10');
+  res.json(rows || []);
 }));
 
 app.get('/api/pages/:id', authMiddleware, asyncHandler(async (req, res) => {
@@ -1943,7 +2060,7 @@ app.post('/api/questions', authMiddleware, asyncHandler(async (req, res) => {
       if (!exists || exists.length === 0) break;
       finalSlug = `${baseSlug}-${Date.now().toString(36).slice(-4)}-${i}`;
     }
-    const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug'];
+    const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug','marks','negative_marks','difficulty_level'];
     const vals = fields.map(f => (f === 'slug' ? finalSlug : (data[f] || null)));
     const placeholders = fields.map(() => '?').join(',');
     let newId;
@@ -2083,7 +2200,7 @@ app.post('/api/questions/bulk', authMiddleware, asyncHandler(async (req, res) =>
   // replace items with prepared (contain slug)
   // Note: downstream insertion reads fields from objects by name
   for (let i = 0; i < items.length; i++) items[i] = prepared[i];
-  const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug'];
+  const fields = ['question_english','question_hindi','options_1_english','options_2_english','options_3_english','options_4_english','options_1_hindi','options_2_hindi','options_3_hindi','options_4_hindi','answer','category','chapter_name','solution','slug','marks','negative_marks','difficulty_level'];
   const chunkSize = 200;
   let inserted = 0;
   try {
@@ -2102,7 +2219,18 @@ app.post('/api/questions/bulk', authMiddleware, asyncHandler(async (req, res) =>
         if (result && typeof result.affectedRows === 'number') inserted += result.affectedRows;
       }
     }
-    res.json({ ok: true, inserted });
+
+    // Fetch back the IDs using slugs to return full objects to frontend
+    const allSlugs = items.map(i => i.slug).filter(Boolean);
+    let savedQuestions = [];
+    if (allSlugs.length > 0) {
+      const placeholders = allSlugs.map(() => '?').join(',');
+      const [rows] = await dbQuery(`SELECT id, slug FROM questions WHERE slug IN (${placeholders})`, allSlugs);
+      const slugMap = new Map((rows || []).map(r => [r.slug, r.id]));
+      savedQuestions = items.map(it => ({ ...it, id: slugMap.get(it.slug) }));
+    }
+
+    res.json({ ok: true, inserted, questions: savedQuestions });
   } catch (e) {
     console.error('bulk insert failed', e && (e.message || e));
     res.status(500).json({ error: e && e.message ? e.message : 'bulk insert failed' });
@@ -2236,6 +2364,145 @@ app.delete('/api/admin/comments/:id', authMiddleware, asyncHandler(async (req, r
   }
   await dbQuery('DELETE FROM comments WHERE id = ?', [id]);
   res.json({ deleted: true });
+}));
+
+// AI Notes Generator
+app.post('/api/admin/ai/generate-notes', authMiddleware, asyncHandler(async (req, res) => {
+  const { exam, subject, chapter, language } = req.body;
+  if (!chapter) return res.status(400).json({ error: 'Chapter is required' });
+
+  const settings = readSettings();
+  const apiKey = settings.ai_config && settings.ai_config.apiKey;
+  const baseUrl = (settings.ai_config && settings.ai_config.baseUrl) || 'https://api.openai.com/v1/chat/completions';
+  const model = (settings.ai_config && settings.ai_config.model) || 'gpt-3.5-turbo';
+
+  if (!apiKey) return res.status(500).json({ error: 'AI API Key not configured in Settings' });
+
+  const prompt = `Generate comprehensive study notes for the chapter "${chapter}" for the exam "${exam || 'General'}" in subject "${subject || 'General Knowledge'}".
+Language: ${language || 'Hindi & English'}.
+Format: Use clear headings, bullet points, and bold text for key terms. If language is Hinglish/Hindi, ensure key terms are also provided in English.
+Strictly adhere to the ${exam || 'exam'} syllabus. Do not include out-of-syllabus topics.
+Output ONLY the notes content in Markdown/HTML format suitable for rendering.`;
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: "You are an expert exam tutor." }, { role: "user", content: prompt }],
+        temperature: 0.7
+      })
+    });
+    if (!response.ok) { const errText = await response.text(); throw new Error(`AI API Error: ${response.status} ${errText}`); }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content generated');
+    res.json({ notes: content });
+  } catch (err) { console.error('AI Notes Generation failed:', err); res.status(500).json({ error: err.message }); }
+}));
+
+app.post('/api/admin/notes', authMiddleware, asyncHandler(async (req, res) => {
+  const { exam, subject, chapter, language, content, active, slug, meta_title, meta_description } = req.body;
+  if (!content) return res.status(400).json({ error: 'Content is missing' });
+  const isActive = active === undefined ? 1 : (active ? 1 : 0);
+  await dbQuery(`INSERT INTO notes (exam, subject, chapter, language, content, active, slug, meta_title, meta_description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [exam||'', subject||'', chapter||'', language||'', content, isActive, slug||'', meta_title||'', meta_description||'']);
+  res.json({ ok: true });
+}));
+
+app.put('/api/admin/notes/:id', authMiddleware, asyncHandler(async (req, res) => {
+  const id = req.params.id;
+  const { active } = req.body;
+  await dbQuery('UPDATE notes SET active = ? WHERE id = ?', [active ? 1 : 0, id]);
+  res.json({ ok: true });
+}));
+
+app.get('/api/admin/notes', authMiddleware, asyncHandler(async (req, res) => {
+  const [rows] = await dbQuery('SELECT * FROM notes ORDER BY created_at DESC');
+  res.json(rows || []);
+}));
+
+// Public Notes API
+app.get('/api/public/notes', asyncHandler(async (req, res) => {
+  const [rows] = await dbQuery('SELECT id, exam, subject, chapter, language, created_at FROM notes WHERE active = 1 ORDER BY exam ASC, subject ASC, chapter ASC');
+  res.json(rows || []);
+}));
+
+app.get('/api/public/notes/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id;
+  const [rows] = await dbQuery('SELECT * FROM notes WHERE id = ? AND active = 1 LIMIT 1', [id]);
+  if (!rows || rows.length === 0) return res.status(404).json({ error: 'Note not found' });
+  res.json(rows[0]);
+}));
+
+// Use AI Routes
+app.use('/api/admin/ai', aiRoutes);
+
+// Pick existing questions from Bank (Random/Shuffle)
+app.post('/api/questions/pick', authMiddleware, asyncHandler(async (req, res) => {
+  const { subject, chapter, count, difficulty, excludeIds } = req.body;
+  const limit = Number(count) || 5;
+  const params = [];
+  let sql = "SELECT * FROM questions WHERE active = 1";
+  
+  if (subject) {
+    sql += " AND category = ?";
+    params.push(subject);
+  }
+  if (chapter) {
+    sql += " AND chapter_name = ?";
+    params.push(chapter);
+  }
+  if (difficulty) {
+    sql += " AND difficulty_level = ?";
+    params.push(difficulty);
+  }
+  if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+    // Filter out already selected questions to avoid duplicates
+    const placeholders = excludeIds.map(() => '?').join(',');
+    sql += ` AND id NOT IN (${placeholders})`;
+    params.push(...excludeIds);
+  }
+  
+  if (useSqlite) {
+    sql += " ORDER BY RANDOM() LIMIT ?";
+  } else {
+    sql += " ORDER BY RAND() LIMIT ?";
+  }
+  params.push(limit);
+  
+  const [rows] = await dbQuery(sql, params);
+  res.json({ questions: rows || [] });
+}));
+
+// Question Sets Management
+app.get('/api/admin/question-sets', authMiddleware, asyncHandler(async (req, res) => {
+  const [rows] = await dbQuery('SELECT * FROM question_sets ORDER BY created_at DESC');
+  res.json(rows || []);
+}));
+
+app.post('/api/admin/question-sets', authMiddleware, asyncHandler(async (req, res) => {
+  const { name, exam_name, total_questions, items } = req.body;
+  if (!name) return res.status(400).json({ error: 'Set name required' });
+  
+  let setId;
+  if (useSqlite) {
+    const [info] = await dbQuery('INSERT INTO question_sets (name, exam_name, total_questions, status) VALUES (?, ?, ?, ?)', [name, exam_name, total_questions, 'draft']);
+    setId = info.lastInsertRowid;
+  } else {
+    const [result] = await dbQuery('INSERT INTO question_sets (name, exam_name, total_questions, status) VALUES (?, ?, ?, ?)', [name, exam_name, total_questions, 'draft']);
+    setId = result.insertId;
+  }
+
+  if (Array.isArray(items) && items.length > 0) {
+    for (let i = 0; i < items.length; i++) {
+      const qId = items[i];
+      await dbQuery('INSERT INTO question_set_items (set_id, question_id, question_order) VALUES (?, ?, ?)', [setId, qId, i + 1]);
+    }
+  }
+  
+  const [rows] = await dbQuery('SELECT * FROM question_sets WHERE id = ? LIMIT 1', [setId]);
+  res.json(rows[0]);
 }));
 
 // Product branding: public list
