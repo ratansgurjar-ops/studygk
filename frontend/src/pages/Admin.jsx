@@ -721,8 +721,15 @@ export default function Admin(){
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
         body: JSON.stringify({ topic: aiPrompt })
       })
+      if (!res.ok) {
+        if (res.status === 404) throw new Error('AI endpoint not found on server. Please update backend.')
+        const txt = await res.text()
+        try {
+          const err = JSON.parse(txt)
+          throw new Error(err.error || 'Generation failed')
+        } catch (e) { throw new Error('Server error: ' + res.status) }
+      }
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Generation failed')
       
       setForm(prev => ({
         ...prev,
