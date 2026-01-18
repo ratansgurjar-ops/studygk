@@ -72,7 +72,6 @@ export default function Home({ search, setSearch }){
 
   const [brandStrip, setBrandStrip] = useState([])
   const [news, setNews] = useState([])
-  const [pages, setPages] = useState([])
   // fetch news helper (used for initial load and polling)
   const fetchNews = async ()=>{
     try{
@@ -91,13 +90,6 @@ export default function Home({ search, setSearch }){
       .then(r=>r.json())
       .then(data => setBrandStrip(Array.isArray(data) ? data : []))
       .catch(()=>setBrandStrip([]))
-  },[])
-
-  useEffect(()=>{
-    fetch('/api/pages-public')
-      .then(r=>r.json())
-      .then(data => setPages(Array.isArray(data) ? data : []))
-      .catch(()=>setPages([]))
   },[])
 
   const anyAmazonLink = (arr) => {
@@ -377,28 +369,6 @@ export default function Home({ search, setSearch }){
           </div>
         </div>
       </section>
-
-      {/* Other Pages */}
-      {pages && pages.length > 0 && (
-        <section className="recent-news" aria-label="Other Pages">
-          <div className="recent-inner" style={{maxWidth:1100,margin:'18px auto',padding:'0 18px'}}>
-            <div className="recent-header" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-              <h3 style={{margin:0}}>Other</h3>
-            </div>
-            <div className="recent-grid">
-              {pages.slice(0,4).map(p=> (
-                <article key={p.id} className="recent-card">
-                  <div className="recent-card-body">
-                    <div className="muted" style={{fontSize:12}}>{new Date(p.created_at).toLocaleDateString()}</div>
-                    <h4 style={{margin:'6px 0'}} className="recent-card-title"><a href={`/${p.slug}`} onClick={(e)=>{ e.preventDefault(); try{ window.history.pushState({},'', `/${p.slug}`); window.dispatchEvent(new PopStateEvent('popstate')) }catch(e){ window.location.href = `/${p.slug}` } }}>{p.title}</a></h4>
-                    <p className="muted" style={{fontSize:13}}>{p.meta_description || 'No description available.'}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* CTA banner */}
       <section className="cta-banner" aria-label="Trusted banner">

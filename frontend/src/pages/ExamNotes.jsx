@@ -110,6 +110,7 @@ export default function ExamNotes() {
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br />')
+      .replace(/(<\/h[1-6]>)(<br \/>)+/g, '$1')
     return html
   }
 
@@ -146,9 +147,13 @@ export default function ExamNotes() {
       </Helmet>
 
       <div className="notes-mobile-header">
-        <button onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}>☰ Topics</button>
+        <button onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}>
+          {mobileSidebarOpen ? '✕ Close' : '☰ Topics'}
+        </button>
         <span>Exam Notes</span>
       </div>
+
+      {mobileSidebarOpen && <div className="mobile-sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />}
 
       <aside className={`notes-sidebar ${mobileSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
@@ -221,31 +226,7 @@ export default function ExamNotes() {
         )}
       </main>
 
-      {/* Right Branding Sidebar */}
-      <aside className="branding-sidebar-right">
-        <div className="branding-section">
-          <h3>General Knowledge</h3>
-          <div className="branding-links">
-            {brandingData.categories.slice(0, 3).map(cat => (
-              <a key={cat} href={`/general-knowledge?category=${encodeURIComponent(cat)}`} target="_blank" rel="noopener noreferrer" className="branding-link">
-                {cat}
-              </a>
-            ))}
-            <a href="/general-knowledge" className="branding-link view-all">View All GK &rarr;</a>
-          </div>
-        </div>
-        <div className="branding-section">
-          <h3>Current Affairs</h3>
-          <div className="branding-links">
-            <a href="/currentaffairs" className="branding-link highlight">Daily Current Affairs</a>
-            {['Monthly', 'Sports', 'Awards'].map(chap => (
-              <a key={chap} href={`/currentaffairs?chapter_like=${chap}`} className="branding-link">{chap} CA</a>
-            ))}
-            <a href="/currentaffairs" className="branding-link view-all">View All CA &rarr;</a>
-          </div>
-        </div>
-      </aside>
-    </div>
+      </div>
 
       <style>{`
         .exam-notes-page { display: flex; flex-direction: column; height: 100vh; }
@@ -290,17 +271,18 @@ export default function ExamNotes() {
         .doc-watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 6rem; font-weight: 900; color: rgba(0,0,0,0.03); white-space: nowrap; pointer-events: none; user-select: none; z-index: 0; text-align: center; }
         .doc-watermark .sub { font-size: 2rem; margin-top: 10px; letter-spacing: 10px; }
         .doc-body { position: relative; z-index: 1; line-height: 1.8; color: #334155; font-size: 1.05rem; }
-        .doc-body h1.chapter-title { font-size: 2rem; color: #0f172a; margin-bottom: 30px; text-align: center; }
-        .doc-body h1 { font-size: 1.5rem; color: #1e3a8a; margin-top: 25px; }
-        .doc-body h2 { font-size: 1.3rem; color: #1e40af; margin-top: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px; }
-        .doc-body h3 { font-size: 1.1rem; color: #334155; margin-top: 15px; }
+        .doc-body h1.chapter-title { font-size: 2rem; color: #0f172a; margin-bottom: 15px; text-align: center; }
+        .doc-body h1 { font-size: 1.5rem; color: #1e3a8a; margin-top: 15px; margin-bottom: 4px; }
+        .doc-body h2 { font-size: 1.3rem; color: #1e40af; margin-top: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; margin-bottom: 4px; }
+        .doc-body h3 { font-size: 1.1rem; color: #334155; margin-top: 10px; margin-bottom: 2px; }
         .doc-body ul, .doc-body ol { padding-left: 25px; margin-bottom: 15px; }
         .doc-body li { margin-bottom: 5px; }
         .doc-body strong { color: #0f172a; }
         .doc-footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 0.85rem; color: #94a3b8; font-weight: 500; }
-        .notes-mobile-header { display: none; background: #fff; padding: 15px; border-bottom: 1px solid #e2e8f0; align-items: center; gap: 15px; }
+        .notes-mobile-header { display: none; background: #fff; padding: 15px; border-bottom: 1px solid #e2e8f0; align-items: center; gap: 15px; position: relative; z-index: 51; }
         .notes-mobile-header button { background: none; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
         .notes-mobile-header span { font-weight: 700; color: #1e293b; }
+        .mobile-sidebar-backdrop { display: none; }
 
         /* Right Branding Sidebar */
         .branding-sidebar-right { width: 240px; background: #fff; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; padding: 20px 15px; gap: 25px; }
@@ -314,6 +296,7 @@ export default function ExamNotes() {
         @media (max-width: 768px) {
           .exam-notes-layout { flex-direction: column; }
           .notes-mobile-header { display: flex; }
+          .mobile-sidebar-backdrop { display: block; position: absolute; top: 57px; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 40; }
           .notes-sidebar { position: absolute; top: 57px; bottom: 0; left: 0; transform: translateX(-100%); width: 80%; max-width: 300px; box-shadow: 5px 0 15px rgba(0,0,0,0.1); }
           .notes-sidebar.open { transform: translateX(0); }
           .document-container { padding: 15px; }

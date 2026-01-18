@@ -428,7 +428,15 @@ export default function QuestionSetGenerator({ token }) {
       const res = await fetch('/api/admin/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
-        body: JSON.stringify({ ...noteConfig, content: noteContent, slug: noteConfig.slug, meta_title: noteConfig.meta_title, meta_description: noteConfig.meta_description })
+        body: JSON.stringify({
+          ...noteConfig,
+          minWords: Number(noteConfig.minWords),
+          content: noteContent,
+          slug: noteConfig.slug,
+          meta_title: noteConfig.meta_title,
+          meta_description: noteConfig.meta_description,
+          active: 1
+        })
       })
       if (!res.ok) throw new Error('Save failed')
       alert('Notes saved to database successfully!')
@@ -456,19 +464,19 @@ export default function QuestionSetGenerator({ token }) {
 
       if (trim.startsWith('# ')) {
         if (inList) { output += '</ul>'; inList = false }
-        output += `<h1 style="font-size:24px; color:#1e3a8a; margin-top:20px; margin-bottom:10px;">${trim.substring(2)}</h1>`
+        output += `<h1 style="font-size:24px; color:#1e3a8a; margin-top:10px; margin-bottom:5px;">${trim.substring(2)}</h1>`
       } else if (trim.startsWith('## ')) {
         if (inList) { output += '</ul>'; inList = false }
-        output += `<h2 style="font-size:20px; color:#2563eb; margin-top:15px; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">${trim.substring(3)}</h2>`
+        output += `<h2 style="font-size:20px; color:#2563eb; margin-top:10px; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:3px;">${trim.substring(3)}</h2>`
       } else if (trim.startsWith('### ')) {
         if (inList) { output += '</ul>'; inList = false }
-        output += `<h3 style="font-size:18px; color:#334155; margin-top:12px; margin-bottom:6px;">${trim.substring(4)}</h3>`
+        output += `<h3 style="font-size:18px; color:#334155; margin-top:8px; margin-bottom:4px;">${trim.substring(4)}</h3>`
       } else if (trim.startsWith('- ') || trim.startsWith('* ')) {
         if (!inList) { output += '<ul style="padding-left:20px; margin-bottom:10px;">'; inList = true }
         output += `<li style="margin-bottom:4px;">${trim.substring(2)}</li>`
       } else {
         if (inList) { output += '</ul>'; inList = false }
-        output += `<p style="margin-bottom:10px; line-height:1.6;">${trim}</p>`
+        output += `<p style="margin-bottom:6px; line-height:1.5;">${trim}</p>`
       }
     })
     if (inList) output += '</ul>'
@@ -489,11 +497,11 @@ export default function QuestionSetGenerator({ token }) {
         <style>
           @page { margin: 0; }
           body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; color: #333; font-size: 16px; }
-          .page-content { padding: 60px 30px 80px 30px; width: 100%; max-width: none; margin: 0; position: relative; z-index: 1; }
-          .header { position: fixed; top: 0; left: 0; padding: 15px 30px; font-weight: bold; font-size: 18px; color: #2563eb; width: 100%; background: rgba(255,255,255,0.95); z-index: 10; border-bottom: 1px solid #f1f5f9; }
+          .page-content { padding: 50px 20px 40px 20px; width: 100%; max-width: 100%; margin: 0; position: relative; z-index: 1; }
+          .header { position: fixed; top: 0; left: 0; padding: 10px 20px; font-weight: bold; font-size: 18px; color: #2563eb; width: 100%; background: rgba(255,255,255,0.95); z-index: 10; border-bottom: 1px solid #f1f5f9; }
           .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 90px; color: rgba(7, 6, 6, 0.14); z-index: 0; white-space: nowrap; pointer-events: none; font-weight: bold; user-select: none; font-family: sans-serif; }
           .footer { position: fixed; bottom: 0; left: 0; width: 100%; text-align: center; padding: 12px; background: #fff; color: #e11d48; font-weight: bold; border-top: 1px solid #f1f5f9; font-size: 14px; z-index: 10; }
-          .meta { color: #64748b; font-size: 0.9rem; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 2px solid #f1f5f9; }
+          .meta { color: #64748b; font-size: 0.9rem; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f1f5f9; }
           a { color: #e11d48; text-decoration: none; }
         </style>
       </head>

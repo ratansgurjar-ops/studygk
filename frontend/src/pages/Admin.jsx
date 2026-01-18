@@ -298,6 +298,8 @@ export default function Admin(){
   const [commentStatusFilter, setCommentStatusFilter] = useState('pending')
   const [commentBlogFilter, setCommentBlogFilter] = useState('')
   const [commentSearch, setCommentSearch] = useState('')
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
   useEffect(()=>{ try{ localStorage.setItem('newsPushRed', JSON.stringify(newsPushRed)) }catch(e){} },[newsPushRed])
 
   async function fetchRequests(){
@@ -709,6 +711,37 @@ export default function Admin(){
       return escapeHtml(snippet).replace(urlRegex, (m)=>{ const u = /^https?:\/\//i.test(m) ? m : ('http://'+m); return `<a href="${u}" target="_blank" rel="noopener noreferrer">${escapeHtml(m)}</a>` })
     }catch(e){ return snippet }
   }
+
+  async function generateBlogWithAI() {
+    if (!aiPrompt.trim()) return alert('Please enter a topic')
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/admin/ai/generate-blog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ topic: aiPrompt })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      
+      setForm(prev => ({
+        ...prev,
+        title: data.title || prev.title,
+        slug: data.slug || prev.slug,
+        meta_title: data.meta_title || prev.meta_title,
+        meta_description: data.meta_description || prev.meta_description,
+        keywords: data.keywords || prev.keywords,
+        summary: data.summary || prev.summary,
+        content: data.content || prev.content
+      }))
+    } catch (e) {
+      console.error(e)
+      alert('Error: ' + e.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <div>
       {!token ? (
@@ -896,6 +929,20 @@ export default function Admin(){
             {activePanel === 'blogs' && (
               <div>
                 <h2>Blog Management</h2>
+                <div style={{background:'#f8fafc', border:'1px solid #e2e8f0', padding:15, borderRadius:8, marginBottom:20, maxWidth:920}}>
+                  <div style={{fontWeight:600, marginBottom:8, color:'#334155'}}>AI Auto-Fill</div>
+                  <div style={{display:'flex', gap:8}}>
+                    <input 
+                      value={aiPrompt} 
+                      onChange={e=>setAiPrompt(e.target.value)} 
+                      placeholder="Enter blog topic or instructions..." 
+                      style={{flex:1}} 
+                    />
+                    <button type="button" onClick={generateBlogWithAI} disabled={aiLoading} style={{background: aiLoading ? '#94a3b8' : '#7c3aed', color:'white', border:'none', whiteSpace:'nowrap'}}>
+                      {aiLoading ? 'Generating...' : 'Generate with AI'}
+                    </button>
+                  </div>
+                </div>
                 <form onSubmit={create} style={{maxWidth:920}}>
                   <div style={{display:'flex',gap:8}}>
                     <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Title" style={{flex:1}}/>
