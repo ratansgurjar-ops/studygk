@@ -2402,6 +2402,55 @@ Output ONLY the notes content in Markdown/HTML format suitable for rendering.`;
   } catch (err) { console.error('AI Notes Generation failed:', err); res.status(500).json({ error: err.message }); }
 }));
 
+app.post('/api/admin/ai/generate-blog', authMiddleware, asyncHandler(async (req, res) => {
+  const { topic } = req.body;
+  if (!topic) return res.status(400).json({ error: 'Topic is required' });
+
+  const settings = readSettings();
+  const apiKey = settings.ai_config && settings.ai_config.apiKey;
+  const baseUrl = (settings.ai_config && settings.ai_config.baseUrl) || 'https://api.openai.com/v1/chat/completions';
+  const model = (settings.ai_config && settings.ai_config.model) || 'gpt-3.5-turbo';
+
+  if (!apiKey) return res.status(500).json({ error: 'AI API Key not configured in Settings' });
+
+  const prompt = `Write a comprehensive blog post about "${topic}".
+Return the result as a valid JSON object with the following keys:
+- title: A catchy title
+- slug: A URL-friendly slug
+- meta_title: SEO title (max 60 chars)
+- meta_description: SEO description (max 160 chars)
+- keywords: Comma-separated keywords
+- summary: A short summary (2-3 sentences)
+- content: The full blog post content in HTML format (use <h2>, <h3>, <p>, <ul>, <li>, etc.). Do not include <html>, <head>, or <body> tags.
+
+Ensure the JSON is valid and strictly formatted.`;
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: "You are a professional blog writer and SEO expert. You output strict JSON." }, { role: "user", content: prompt }],
+        temperature: 0.7
+      })
+    });
+    if (!response.ok) { const errText = await response.text(); throw new Error(`AI API Error: ${response.status} ${errText}`); }
+    const data = await response.json();
+    const contentRaw = data.choices?.[0]?.message?.content;
+    if (!contentRaw) throw new Error('No content generated');
+
+    let blogData;
+    try { blogData = JSON.parse(contentRaw); }
+    catch (e) {
+      const match = contentRaw.match(/\{[\s\S]*\}/);
+      if (match) blogData = JSON.parse(match[0]);
+      else throw new Error('Failed to parse AI response');
+    }
+    res.json(blogData);
+  } catch (err) { console.error('AI Blog Generation failed:', err); res.status(500).json({ error: err.message }); }
+}));
+
 app.post('/api/admin/notes', authMiddleware, asyncHandler(async (req, res) => {
   const { exam, subject, chapter, language, content, active, slug, meta_title, meta_description } = req.body;
   if (!content) return res.status(400).json({ error: 'Content is missing' });
