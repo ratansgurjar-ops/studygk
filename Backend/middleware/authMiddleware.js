@@ -5,6 +5,7 @@ let JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   if (process.env.NODE_ENV === 'production') {
     console.error('FATAL: JWT_SECRET environment variable not set.');
+    process.exit(1);
   } else {
     JWT_SECRET = 'dev-secret';
   }

@@ -2848,6 +2848,11 @@ app.post('/api/brands-public', asyncHandler(async (req, res) => {
 
 app.get('/', (req, res) => res.json({ ok: true }));
 
+// Return 404 for /admin to prevent indexing issues with redirects
+app.get('/admin', (req, res) => {
+  res.status(404).send('Not found');
+});
+
 // Serve a simple HTML page with meta tags for social crawlers
 app.get('/posts/:slug', asyncHandler(async (req, res) => {
   const slug = req.params.slug;
